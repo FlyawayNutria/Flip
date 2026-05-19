@@ -25,7 +25,15 @@ const int PRINT_INTERVAL    = 500;
 const int LOOP_INTERVAL     = 10;
 const int STEPPER_INTERVAL_US = 20;
 
-const float kx = 20.0;
+float targetAngle = 84.0;   // change this after calibration
+
+float Kp = 0.8;            // proportional gain
+float Ki = 0.0;            // keep zero for now
+float Kd = 0.0;           // derivative gain
+
+float integral = 0.0;
+float previousError = 0.0;
+
 const float VREF = 4.096;
 
 //Global objects
@@ -88,8 +96,8 @@ void setup()
   }
   Serial.println("Initialised Interrupt for Stepper");
 
-  step1.setAccelerationRad(10.0);
-  step2.setAccelerationRad(10.0);
+  step1.setAccelerationRad(125.0);
+  step2.setAccelerationRad(125.0);
 
   pinMode(STEPPER_EN_PIN, OUTPUT);
   digitalWrite(STEPPER_EN_PIN, false);
@@ -112,12 +120,35 @@ void loop()
     sensors_event_t a, g, temp;
     mpu.getEvent(&a, &g, &temp);
 
-    tiltx = atan2(a.acceleration.x, a.acceleration.z)*180.0/PI;
-    
+    tiltx = atan2(a.acceleration.x, a.acceleration.z) * 180.0 / PI;
 
-    step1.setTargetSpeedRad(tiltx * kx);
-    step2.setTargetSpeedRad(-tiltx * kx);
-  }
+    // PID calculation
+    float dt = LOOP_INTERVAL / 1000.0;   // 10 ms = 0.01 s
+
+    float error = tiltx - targetAngle;
+
+    integral += error * dt;
+
+    // anti-windup: stop integral getting huge
+    integral = constrain(integral, -50.0, 50.0);
+
+    float derivative = (error - previousError) / dt;
+    previousError = error;
+
+    float motorCommand = Kp * error + Ki * integral + Kd * derivative;
+
+    // safety limit
+    motorCommand = constrain(motorCommand, -80.0, 80.0);
+
+    // if robot falls too far, stop motors
+    if (abs(error) > 60.0) {
+      motorCommand = 0.0;
+      integral = 0.0;
+    }
+
+    step1.setTargetSpeedRad(motorCommand);
+    step2.setTargetSpeedRad(-motorCommand);
+      }
   
   if (millis() > printTimer) {
     printTimer += PRINT_INTERVAL;
@@ -126,12 +157,7 @@ void loop()
     uint16_t rawAdc = readADC(0);
     float voltage = (rawAdc * VREF) / 4095.0;
 
-    Serial.print(tiltx * 1000);
-    Serial.print(' ');
-    Serial.print(step1.getSpeedRad());
-    Serial.print(' ');
-    Serial.print(voltage);
-    Serial.println();
+    Serial.println(tiltx);
   }
 }
 
