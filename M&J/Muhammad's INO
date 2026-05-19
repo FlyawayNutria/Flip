@@ -1,0 +1,13 @@
+[env:esp32dev]
+platform = espressif32@6.5.0
+board = esp32dev
+framework = arduino
+
+monitor_speed = 115200
+upload_protocol = esptool
+upload_port = COM7
+monitor_port = COM7
+
+lib_deps =
+	khoih-prog/TimerInterrupt_Generic@^1.13.0
+	adafruit/Adafruit MPU6050@^2.2.4
