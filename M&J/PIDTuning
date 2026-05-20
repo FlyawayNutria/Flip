@@ -5,59 +5,49 @@
 #include <Adafruit_Sensor.h>
 #include <step.h>
 
-// --- WIFI LIBRARIES ---
 #include <WiFi.h>
 #include <WebServer.h>
 
-// --- WIFI CREDENTIALS ---
 const char* ssid = "Magdalena";
 const char* password = "josiahfor";
 
-// The Stepper pins
-const int STEPPER1_DIR_PIN  = 16; //D1 = 16
-const int STEPPER1_STEP_PIN = 17; //S1 = 17
-const int STEPPER2_DIR_PIN  = 4; //D2 = 4
-const int STEPPER2_STEP_PIN = 14; //S2 = 14
-const int STEPPER_EN_PIN    = 15; //EN = 15
+const int STEPPER1_DIR_PIN  = 16;
+const int STEPPER1_STEP_PIN = 17;
+const int STEPPER2_DIR_PIN  = 4;
+const int STEPPER2_STEP_PIN = 14;
+const int STEPPER_EN_PIN    = 15;
 
-//ADC pins
 const int ADC_CS_PIN        = 5;
 const int ADC_SCK_PIN       = 18;
 const int ADC_MISO_PIN      = 19;
 const int ADC_MOSI_PIN      = 23;
 
-// Diagnostic pin for oscilloscope
 const int TOGGLE_PIN        = 32;
 
 const int PRINT_INTERVAL    = 500;
-const int LOOP_INTERVAL     = 10; //10 ms = 100Hz
+const int LOOP_INTERVAL     = 10;
 const int STEPPER_INTERVAL_US = 20;
 
 const float kx = 20.0;
 const float VREF = 4.096;
 
-// Complementary filter
 const float C = 0.98; 
 const float DT = (float)LOOP_INTERVAL / 1000.0; 
 
-// --- GLOBAL PID TUNING GAINS ---
-float Kp = 5.0; 
-float Ki = 0.0;
-float Kd = 0.0;
-float setpoint = 82.1; // Structural center of balance
+float Kp = 24.0; 
+float Ki = 0.01;
+float Kd = 0.6;
+float setpoint = 82.7;
 
-// --- GLOBAL TRACKING VARIABLES (Moved here for Wi-Fi access) ---
 bool robot_active = false; 
 float error_old = 0.0;
 float error_integral = 0.0;
 float integrated_velocity = 0.0;
 
-// --- GLOBAL SAFETY LIMITS ---
 const float MAX_INTEGRAL = 50.0;
 const float MAX_ACCEL = 1000.0;
 const float MAX_SPEED = 40.0;
 
-// Global objects
 ESP32Timer ITimer(3);
 Adafruit_MPU6050 mpu; 
 WebServer server(80);
@@ -65,9 +55,6 @@ WebServer server(80);
 step step1(STEPPER_INTERVAL_US, STEPPER1_STEP_PIN, STEPPER1_DIR_PIN);
 step step2(STEPPER_INTERVAL_US, STEPPER2_STEP_PIN, STEPPER2_DIR_PIN);
 
-// =========================================================
-// WEBPAGE BUILDER FUNCTION
-// =========================================================
 String getWebPage() {
   String html = "<html><body style='font-family: Arial; padding: 20px; max-width: 400px; margin: auto;'>";
   html += "<h2 style='text-align: center;'>Balance Bot Tuning</h2>";
@@ -80,7 +67,6 @@ String getWebPage() {
   html += "<b>Kp:</b> <input type='number' step='0.01' name='p' value='" + String(Kp) + "' style='width:100%; padding: 8px; margin-bottom: 10px;'><br>";
   html += "<b>Ki:</b> <input type='number' step='0.01' name='i' value='" + String(Ki) + "' style='width:100%; padding: 8px; margin-bottom: 10px;'><br>";
   html += "<b>Kd:</b> <input type='number' step='0.01' name='d' value='" + String(Kd) + "' style='width:100%; padding: 8px; margin-bottom: 20px;'><br>";
-  // Add this line right below the Kd input box in getWebPage()
   html += "<b>Setpoint:</b> <input type='number' step='0.1' name='t' value='" + String(setpoint) + "' style='width:100%; padding: 8px; margin-bottom: 20px;'><br>";
   html += "<input type='submit' value='UPDATE PID' style='width: 100%; padding: 15px; font-size: 16px; background-color: #4CAF50; color: white; border: none; border-radius: 5px;'>";
   html += "</form>";
@@ -94,9 +80,6 @@ String getWebPage() {
   return html;
 }
 
-// =========================================================
-// INTERRUPT & SENSOR FUNCTIONS
-// =========================================================
 bool TimerHandler(void * timerNo) {
   static bool toggle = false;
   step1.runStepper();
@@ -118,9 +101,6 @@ uint16_t readADC(uint8_t channel) {
   return result;
 }
 
-// =========================================================
-// SETUP
-// =========================================================
 void setup()
 {
   Serial.begin(115200);
@@ -136,7 +116,6 @@ void setup()
   mpu.setGyroRange(MPU6050_RANGE_250_DEG);
   mpu.setFilterBandwidth(MPU6050_BAND_44_HZ);
 
-  // --- WIFI & WEBSERVER SETUP ---
   Serial.print("Connecting to Wi-Fi");
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
@@ -156,7 +135,7 @@ void setup()
     if (server.hasArg("i")) Ki = server.arg("i").toFloat();
     if (server.hasArg("d")) Kd = server.arg("d").toFloat();
     if (server.hasArg("t")) setpoint = server.arg("t").toFloat();
-    error_integral = 0.0; // Reset history cleanly
+    error_integral = 0.0;
     Serial.printf(">>> WEB UPDATE | Kp: %.2f | Ki: %.2f | Kd: %.2f | Setpoint: %.2f\n", Kp, Ki, Kd, setpoint);
     server.send(200, "text/html", getWebPage());
   });
@@ -172,7 +151,6 @@ void setup()
 
   server.begin();
 
-  // --- STEPPER SETUP ---
   if (!ITimer.attachInterruptInterval(STEPPER_INTERVAL_US, TimerHandler)) {
     Serial.println("Failed to start stepper interrupt");
     while (1) delay(10);
@@ -190,16 +168,12 @@ void setup()
   SPI.begin(ADC_SCK_PIN, ADC_MISO_PIN, ADC_MOSI_PIN);
 }
 
-// =========================================================
-// MAIN LOOP
-// =========================================================
 void loop()
 {
   static unsigned long printTimer = 0;  
   static unsigned long loopTimer = 0;   
   static float tiltx = 0.0;  
 
- // --- 1. SENSOR & BALANCING BLOCK (100Hz) ---
   if (millis() > loopTimer) {
     loopTimer += LOOP_INTERVAL;
     
@@ -212,14 +186,10 @@ void loop()
     tiltx = (1.0-C)*accel_tilt + C*(tiltx + gyro_tilt * DT);
     float error = tiltx - setpoint;
     
-    // ----------------------------------------------------
-    // PHASE A: SAFETY SHUTDOWN
-    // ----------------------------------------------------
     if (abs(error) > 30.0 && robot_active) { 
       robot_active = false;
       digitalWrite(STEPPER_EN_PIN, HIGH);
       
-      // Wipe everything immediately
       integrated_velocity = 0.0;
       error_integral = 0.0;
       error_old = 0.0;
@@ -227,33 +197,22 @@ void loop()
       step2.setTargetSpeedRad(0.0);
     } 
     
-    // ----------------------------------------------------
-    // PHASE B: LAUNCH GUARD (ARMING)
-    // ----------------------------------------------------
     if (!robot_active) {
       if (abs(error) < 0.5) { 
-        // We hit the center point! Arm the system.
         robot_active = true;
-        digitalWrite(STEPPER_EN_PIN, LOW); // Physical coils energize (You will feel the "Snap")
+        digitalWrite(STEPPER_EN_PIN, LOW);
         
-        // Prep the math for a perfectly smooth first calculation
         integrated_velocity = 0.0;
         error_integral = 0.0;
         error_old = error; 
         
         Serial.println(">>> Robot armed");
       } else {
-        // Keep library speed at 0 while waiting so it doesn't wind up
         step1.setTargetSpeedRad(0.0);
         step2.setTargetSpeedRad(0.0);
       }
     } 
     
-    // ----------------------------------------------------
-    // PHASE C: ACTIVE BALANCING
-    // Notice this is NOT an "else" statement anymore! 
-    // If Phase B just armed the robot, it immediately flows into this math.
-    // ----------------------------------------------------
     if (robot_active) {
       error_integral += error * DT;
       error_integral = constrain(error_integral, -MAX_INTEGRAL, MAX_INTEGRAL);
@@ -272,10 +231,8 @@ void loop()
     }
   }
 
-  // --- 2. WI-FI SERVER LISTENER ---
   server.handleClient();
 
-  // --- 3. USB SERIAL TUNING PARSER (Kept as backup) ---
   if (Serial.available() > 0) {
     char key = tolower(Serial.read()); 
     float val = Serial.parseFloat(); 
@@ -289,7 +246,7 @@ void loop()
     else if (key == 'd') { Kd = val; Serial.printf(">>> UPDATED Kd to: %.2f\n", Kd); }
     else if (key == 't') { setpoint = val; Serial.printf(">>> UPDATED Setpoint to: %.2f\n", setpoint); }
     else if (key == 'v') { Serial.printf(">>> CURRENT | Kp: %.2f | Ki: %.2f | Kd: %.2f | Setpoint: %.2f\n", Kp, Ki, Kd, setpoint); }
-    else if (key == 's') { // Manual emergency stop via USB
+    else if (key == 's') {
       robot_active = false;
       digitalWrite(STEPPER_EN_PIN, HIGH);
       integrated_velocity = 0.0;
