@@ -1,3 +1,6 @@
+# Install libraries with this command: sudo apt update && sudo apt install python3-opencv python3-flask python3-picamera2 -y
+# command to run code: python3 robot_stream.py
+
 import cv2
 from flask import Flask, Response, render_template_string
 from picamera2 import Picamera2
