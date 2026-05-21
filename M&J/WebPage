@@ -1,0 +1,79 @@
+#include <Arduino.h>
+#include <SPI.h>
+#include <TimerInterrupt_Generic.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include "step.h" 
+#include "secrets.h"
+
+#include <WiFi.h>
+#include <WebServer.h>
+
+const char* ssid = WIFI_SSID;
+const char* password = WIFI_PASS;
+
+WebServer server(80);
+
+// Function to inject real variables into your HTML string
+String getWebPage() {
+  String html = R"rawliteral(
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PID Tuning</title>
+  <style>
+    body { font-family: Arial; padding: 20px; max-width: 400px; margin: auto; text-align: center; }
+    input { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
+    .btn { padding: 15px; font-size: 16px; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%; }
+    .update-btn { background-color: #4CAF50; margin-bottom: 20px; }
+    canvas { width: 100%; height: 250px; border: 1px solid black; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+  <h2>PID Tuning</h2>
+
+  <div style='background: #f4f4f4; padding: 15px; border-radius: 8px; margin-bottom: 20px;'>
+    <strong>Status: </strong> Connected
+  </div>
+
+  <canvas id="plot" width="350" height="250"></canvas>
+
+  <form action='/update' method='GET'>
+    <b>Kp:</b> <input type='number' step='0.01' name='p' value='3'>
+    <b>Ki:</b> <input type='number' step='0.01' name='i' value='4'>
+    <b>Kd:</b> <input type='number' step='0.01' name='d' value='5'>
+    <b>Setpoint:</b> <input type='number' step='0.01' name='t' value='6'>
+    <input type='submit' class='btn update-btn' value='UPDATE PID'>
+  </form>
+
+  <hr style='margin: 20px 0;'>
+</body>
+</html>
+)rawliteral";
+  return html;
+}
+
+void setup() {
+  Serial.begin(115200);
+  Serial.print("Connecting to Wi-Fi");
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\n--- WIFI CONNECTED ---");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  // Handle Main Webpage Route
+  server.on("/", []() {
+    server.send(200, "text/html", getWebPage());
+  });
+
+  server.begin();
+}
+
+void loop() {
+  server.handleClient();
+}
