@@ -4,12 +4,13 @@
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 #include <step.h>
+#include "secrets.h"
 
 #include <WiFi.h>
 #include <WebServer.h>
 
-const char* ssid = "Magdalena";
-const char* password = "josiahfor";
+const char* ssid = WIFI_SSID;
+const char* password = WIFI_PASS;
 
 const int STEPPER1_DIR_PIN  = 16;
 const int STEPPER1_STEP_PIN = 17;
@@ -28,7 +29,6 @@ const int PRINT_INTERVAL    = 500;
 const int LOOP_INTERVAL     = 10;
 const int STEPPER_INTERVAL_US = 20;
 
-const float kx = 20.0;
 const float VREF = 4.096;
 
 const float C = 0.98; 
@@ -68,13 +68,13 @@ String getWebPage() {
   html += "<b>Ki:</b> <input type='number' step='0.01' name='i' value='" + String(Ki) + "' style='width:100%; padding: 8px; margin-bottom: 10px;'><br>";
   html += "<b>Kd:</b> <input type='number' step='0.01' name='d' value='" + String(Kd) + "' style='width:100%; padding: 8px; margin-bottom: 20px;'><br>";
   html += "<b>Setpoint:</b> <input type='number' step='0.1' name='t' value='" + String(setpoint) + "' style='width:100%; padding: 8px; margin-bottom: 20px;'><br>";
-  html += "<input type='submit' value='UPDATE PID' style='width: 100%; padding: 15px; font-size: 16px; background-color: #4CAF50; color: white; border: none; border-radius: 5px;'>";
+  html += "<input type='submit' value='UPDATE PID' style='width: 100%; padding: 15px; font-size: 16px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; pointer: cursor;'>";
   html += "</form>";
   
   html += "<hr style='margin: 20px 0;'>";
   
   html += "<form action='/stop' method='GET'>";
-  html += "<input type='submit' value='EMERGENCY STOP' style='width: 100%; padding: 15px; font-size: 16px; background-color: #f44336; color: white; border: none; border-radius: 5px;'>";
+  html += "<input type='submit' value='EMERGENCY STOP' style='width: 100%; padding: 15px; font-size: 16px; background-color: #f44336; color: white; border: none; border-radius: 5px; pointer: cursor;'>";
   html += "</form>";
   html += "</body></html>";
   return html;
