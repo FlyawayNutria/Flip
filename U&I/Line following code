@@ -1,0 +1,109 @@
+int rawLeft   = 0;  // Reads Left Sensor
+int rawCenter = 0;  // Reads Center Sensor
+int rawRight  = 0;  // Reads Right Sensor
+
+void readLineSensors() {
+  rawLeft   = readADC(0); // Fetch the number for Left
+  rawCenter = readADC(1); // Fetch the number for Center
+  rawRight  = readADC(2); // Fetch the number for Right
+}
+
+int floorMax[3] = {0, 0, 0};          // Will store highest values (Dark Floor ~4000)
+int tapeMin[3]  = {4095, 4095, 4095}; // Will store lowest values (White Tape ~200)
+
+void calibrateSensors() {
+  for (int i = 0; i < 400; i++) {
+    int currentL = readADC(0);
+    int currentC = readADC(1);
+    int currentR = readADC(2);
+
+    // Set the minimums to white tape 
+    if (currentL < tapeMin[0]) tapeMin[0] = currentL;
+    if (currentC < tapeMin[1]) tapeMin[1] = currentC;
+    if (currentR < tapeMin[2]) tapeMin[2] = currentR;
+
+    // Set the maximums to the black floor
+    if (currentL > floorMax[0]) floorMax[0] = currentL;
+    if (currentC > floorMax[1]) floorMax[1] = currentC;
+    if (currentR > floorMax[2]) floorMax[2] = currentR;
+    
+    delay(10); // Sensor runs for 10ms x 400 = 4s setup delay for calibration
+  }
+}
+
+float normLeft, normCenter, normRight;
+
+void normalizeReadings() {
+  int clampedL = constrain(rawLeft, tapeMin[0], floorMax[0]);
+  // INVERSION: Low raw value maps to 1000, high raw value maps to 0
+  normLeft = map(clampedL, tapeMin[0], floorMax[0], 1000, 0);
+
+  int clampedC = constrain(rawCenter, tapeMin[1], floorMax[1]);
+  normCenter = map(clampedC, tapeMin[1], floorMax[1], 1000, 0);
+
+  int clampedR = constrain(rawRight, tapeMin[2], floorMax[2]);
+  normRight = map(clampedR, tapeMin[2], floorMax[2], 1000, 0);
+}
+
+// we use a Weighted Centroid formula to find out exactly where the center of the 
+// tape is relative to the robot's centerline
+float calculateLineError() {
+  float totalWeight = normLeft + normCenter + normRight;
+  
+  // If the robot drifts completely off the white track, totalWeight approaches 0.
+  // We check this to prevent a critical divide-by-zero crash.
+  if (totalWeight < 150) { 
+    return 0; // Hold steady or stay in previous state
+  }
+
+  float error = ((normLeft * -1000.0) + (normCenter * 0.0) + (normRight * 1000.0)) / totalWeight;
+  return error; 
+
+  // if error > 0, the tape has moved to the right sensor, indicating that robot moved left
+}
+
+float Kp_yaw = 0.35;  // Adjust how aggressively it snaps back to the line
+float Kd_yaw = 0.12;  // Adjust to dampen oscillations (prevents zig-zagging)
+
+float lastError = 0;
+
+float getSteeringCorrection(float currentError) {
+  float P = currentError;
+  float D = currentError - lastError;
+  lastError = currentError;
+
+  return (P * Kp_yaw) + (D * Kd_yaw);
+}
+
+void loop() {
+  // 1. Gather and normalize data
+  readLineSensors();
+  normalizeReadings();
+
+  // Calculate the total brightness of all 3 sensors combined
+  float totalBrightness = normLeft + normCenter + normRight;
+
+  // 2. Path Completed Check (No more white tape anywhere!)
+  // If the total brightness is less than 150, all sensors are on the dark floor.
+  if (totalBrightness < 150) {
+    // The path is over! 
+    // Tell the steering to stop, and just run the balance code to hover in place.
+    float balanceSpeed = runBalancePID(); 
+    commandMotors(balanceSpeed, balanceSpeed); 
+    return; // Skip the rest of the loop so it doesn't try to steer
+  }
+
+  // 3. Independent Control Systems (Only runs if tape is found!)
+  float balanceSpeed   = runBalancePID();      
+  float currentError   = calculateLineError(); // This math is now safe from dividing by 0
+  float steeringOffset = getSteeringCorrection(currentError);
+
+  // 4. Motor Mixing Architecture
+  float leftMotorSpeed  = balanceSpeed + steeringOffset;
+  float rightMotorSpeed = balanceSpeed - steeringOffset;
+
+  // 5. Send calculated speeds to your physical stepper motors
+  commandMotors(leftMotorSpeed, rightMotorSpeed);
+
+  delay(5); 
+}
