@@ -1,0 +1,84 @@
+#include <Arduino.h>
+
+// Define which hardware serial port to use for the link to the Raspberry Pi.
+// On most ESP32 boards, HardwareSerial 2 uses pins RX=16 and TX=17.
+HardwareSerial PiSerial(2); 
+
+// Global variables to track the path status
+int lineError = 0;
+bool lineLost = true;
+
+// Steering variable: this value will modify your robot's wheel speeds.
+// 0 = Straight ahead | Negative = Steering Left | Positive = Steering Right
+float robotTargetTurning = 0.0; 
+
+// --- TUNING PARAMETER ---
+// Adjust this factor to change how aggressively the robot reacts to the line.
+// Higher = sharp, sudden turns. Lower = smooth, gradual corrections.
+const float K_STEERING = 0.65; 
+
+void readPiData() {
+    // Check if the Pi has sent any text data across the UART lines
+    if (PiSerial.available()) {
+        // Read the incoming message string until the newline character '\n'
+        String input = PiSerial.readStringUntil('\n');
+        input.trim(); // Clean up any trailing hidden whitespace characters
+        
+        // Check if the packet starts with the expected "E:" prefix
+        if (input.startsWith("E:")) {
+            String val = input.substring(2); // Extract the payload after "E:"
+            
+            if (val == "LOST") {
+                lineLost = true;
+                robotTargetTurning = 0.0; // Stop turning adjustments if the line disappears
+                Serial.println("❌ ESP32 Alert: Line Lost! Maintaining balance standard.");
+            } else {
+                lineLost = false;
+                lineError = val.toInt(); // Convert the text number into a standard integer
+                
+                // Calculate how much the robot needs to yaw/turn.
+                // The Python script gives negative values for left, positive for right.
+                robotTargetTurning = lineError * K_STEERING;
+                
+                // Optional: Print to the laptop serial monitor for hardware tracking
+                Serial.print("🎯 Error Received: ");
+                Serial.print(lineError);
+                Serial.print(" | Target Turning Force: ");
+                Serial.println(robotTargetTurning);
+            }
+        }
+    }
+}
+
+void setup() {
+    // Open communication back to your laptop for debugging printouts
+    Serial.begin(115200); 
+    
+    // Open communication to the Raspberry Pi GPIO pins (115200 baud, RX=16, TX=17)
+    PiSerial.begin(115200, SERIAL_8N1, 16, 17); 
+    
+    Serial.println("==============================================");
+    Serial.println("🤖 ESP32 Balancing Robot - Path Follower Booted");
+    Serial.println("==============================================");
+}
+
+void loop() {
+    // 1. Instantly ingest and parse any fresh camera data from the Pi
+    readPiData();
+    
+    // 2. Read your IMU / Gyroscope (e.g., MPU6050) to get current tilt angle
+    // float currentPitch = readIMU(); 
+
+    // 3. Compute your core balancing PID loop equation
+    // float balanceOutput = calculatePID(currentPitch);
+
+    // 4. Mix the stabilization output with the path-tracking steering data.
+    // When robotTargetTurning is positive, left motor speeds up and right slows down, yawing the robot right.
+    // float leftMotorSpeed  = balanceOutput + robotTargetTurning;
+    // float rightMotorSpeed = balanceOutput - robotTargetTurning;
+    
+    // 5. Constraints and PWM delivery to the H-Bridge motor driver chips
+    // driveMotors(leftMotorSpeed, rightMotorSpeed);
+    
+    // Keep this loop running completely unhindered with NO long delays (delay() is forbidden)
+}
