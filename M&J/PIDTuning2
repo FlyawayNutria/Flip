@@ -10,12 +10,14 @@ float error = 0.0;
 float accelAngle = 0.0;
 float gyroRate = 0.0;
 float targetSpeed = 0.0;
+float targetAccel = 0.0;
 float currentVelo = 0.0;
-float kp = 2.33;
+float kp = 2.35;
 float ki = 0.0;
 float kd = 0.0;
+float kv = 0.0;
 float error_integral = 0.0;
-float setpoint = 82.2; //Setpoint in degrees!
+float setpoint = 87.7; //Setpoint in degrees!
 bool botActive = false; //Safety toggle
 
 //Wifi stuff
@@ -55,6 +57,7 @@ String getWebPage() {
     <b>Kp:</b> <input type='number' step='0.01' name='p' value='PLACEHOLDER_KP'>
     <b>Ki:</b> <input type='number' step='0.01' name='i' value='PLACEHOLDER_KI'>
     <b>Kd:</b> <input type='number' step='0.01' name='d' value='PLACEHOLDER_KD'>
+    <b>Kv:</b> <input type='number' step='0.01' name='v' value='PLACEHOLDER_KV'>
     <b>Setpoint:</b> <input type='number' step='0.01' name='t' value='PLACEHOLDER_SP'>
     <input type='submit' class='btn update-btn' value='UPDATE PID'>
   </form>
@@ -67,6 +70,7 @@ String getWebPage() {
   html.replace("PLACEHOLDER_KI", String(ki, 2));
   html.replace("PLACEHOLDER_KD", String(kd, 2));
   html.replace("PLACEHOLDER_SP", String(setpoint, 2));
+  html.replace("PLACEHOLDER_KV", String(kv, 2));
   return html;
 }
 
@@ -86,14 +90,15 @@ const int ADC_MOSI_PIN      = 23;
 // Diagnostic pin for oscilloscope
 const int TOGGLE_PIN        = 32;
 
-const int PRINT_INTERVAL    = 500;
-const int LOOP_INTERVAL     = 10;
-const int STEPPER_INTERVAL_US = 50; //DEFAULT: 20
+const int PRINT_INTERVAL    = 2000; //Highkey don't need this atm
+const int LOOP_INTERVAL     = 2; //Default is 10 so 100hz.
+const int STEPPER_INTERVAL_US = 20; //DEFAULT: 20
 
 const float VREF = 4.096;
 
-const float C = 0.98;
+const float C = 0.98; //0.98
 const float DT = (float)LOOP_INTERVAL / 1000.0;
+const float motorAccel = 2000.0; //2000
 
 //Global objects
 ESP32Timer ITimer(3);
@@ -155,7 +160,7 @@ void setup()
 
   mpu.setAccelerometerRange(MPU6050_RANGE_2_G);
   mpu.setGyroRange(MPU6050_RANGE_250_DEG);
-  mpu.setFilterBandwidth(MPU6050_BAND_44_HZ);
+  mpu.setFilterBandwidth(MPU6050_BAND_44_HZ); //Default 44Hz
 
   //Connect to WiFi
   Serial.print("Connecting to Wi-Fi");
@@ -179,7 +184,8 @@ void setup()
     if (server.hasArg("i")) {ki = server.arg("i").toFloat(); error_integral = 0.0;}
     if (server.hasArg("d")) kd = server.arg("d").toFloat();
     if (server.hasArg("t")) setpoint = server.arg("t").toFloat();
-    Serial.printf("Web Update: | Kp: %.2f | Ki: %.2f | Kd: %.2f | Setpoint: %.2f \n", kp, ki, kd, setpoint);
+    if (server.hasArg("v")) kv = server.arg("v").toFloat();
+    Serial.printf("Web Update: | Kp: %.2f | Ki: %.2f | Kd: %.2f | Setpoint: %.2f | Kv: %.2f \n", kp, ki, kd, setpoint, kv);
     server.send(200, "text/html", getWebPage());
   });
 
@@ -193,8 +199,8 @@ void setup()
   Serial.println("Initialised Interrupt for Stepper");
 
   //Changed from 10 to 2000 so no limit on responsiveness
-  step1.setAccelerationRad(2000.0);
-  step2.setAccelerationRad(2000.0);
+  step1.setAccelerationRad(motorAccel);
+  step2.setAccelerationRad(motorAccel);
 
   //Enable the stepper motor drivers
   pinMode(STEPPER_EN_PIN,OUTPUT);
@@ -238,7 +244,7 @@ void loop()
     }
 
     if (!botActive) {
-      if (abs(error) < 0.5) { //Start if near setpoint
+      if (abs(error) < 5) { //Start if near setpoint
         botActive = true;
         digitalWrite(STEPPER_EN_PIN, LOW);
         error_integral = 0.0;
@@ -249,13 +255,18 @@ void loop()
     } else { //If bot is armed
       error_integral += error * DT;
       error_integral = constrain(error_integral, -50.0, 50.0);
-      targetSpeed = (error * kp) + (error_integral * ki) + (gyroRate * kd);
-      //targetAccel = error * kp;
-      //currentVelo += (targetAccel * DT);
-      //step1.setTargetSpeedRad(currentVelo);
-      //step2.setTargetSpeedRad(-currentVelo);
-      step1.setTargetSpeedRad(targetSpeed);
-      step2.setTargetSpeedRad(-targetSpeed);
+      
+      //Method 1 uses the direct output of the PID to set motor speed
+      //targetSpeed = (error * kp) + (error_integral * ki) + (gyroRate * kd);
+      //step1.setTargetSpeedRad(targetSpeed);
+      //step2.setTargetSpeedRad(-targetSpeed);
+      
+      //Method 2 integrates the output (acceleration) into a speed
+      targetAccel = (error * kp) + (gyroRate * kd) - (currentVelo * kv);
+      currentVelo += (targetAccel * DT);
+      step1.setTargetSpeedRad(currentVelo);
+      step2.setTargetSpeedRad(-currentVelo);
+      
     }
   }
 
@@ -264,6 +275,7 @@ void loop()
   //Print updates every PRINT_INTERVAL ms
   if (millis() > printTimer) {
     printTimer += PRINT_INTERVAL;
-    Serial.println(tiltx);
+    //Serial.print(">tiltx:"); //Teleplot format is >variableName:value
+    //Serial.println(tiltx);
   }
 }
