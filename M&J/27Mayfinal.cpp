@@ -107,7 +107,15 @@ bool is_holding = false; //Need this to tell when bot is still or not
 float current_heading = 0.0;   //Absolute angle (degrees)
 float target_heading = 0.0;    //Desired angle
 bool is_turning = false;       //Flag
-const float K_YAW = 0.15;      //Proportional gain for turning (tune ts)
+float K_YAW = 0.07;      //Proportional gain for turning (tune ts) //0.07 and 0.02 works
+float K_DAMP = 0.02; //Derivative gain for turning
+
+float yawX = 0.0;
+float yawRate = 0.0;
+float alpha = 0.98;
+float pitch = 0.0;
+float roll = 0.0;
+float yaw = 0.0;
 
 float current_target_velocity = 0.0;
 const float VELOCITY_RAMP_RATE = 30.0; //20
@@ -126,7 +134,8 @@ String getWebPage() {
   html.replace("%KI%", String(Ki));
   html.replace("%KD%", String(Kd));
   html.replace("%SP%", String(setpoint));
-  html.replace("%KV%", String(Kv));
+  html.replace("%TKP%", String(K_YAW));
+  html.replace("%TKD%", String(K_DAMP));
   html.replace("%STATUS%", robot_active ? "<span style='color:green;'>ARMED</span>" : "<span style='color:red;'>STANDBY</span>");
 
   return html;
@@ -214,9 +223,11 @@ void setup()
     if (server.hasArg("i")) Ki = server.arg("i").toFloat();
     if (server.hasArg("d")) Kd = server.arg("d").toFloat();
     if (server.hasArg("t")) setpoint = server.arg("t").toFloat();
+	if (server.hasArg("tkp")) K_YAW = server.arg("tkp").toFloat();
+	if (server.hasArg("tkd")) K_DAMP = server.arg("tkd").toFloat();
 
     error_integral = 0.0;
-    Serial.printf("Web Update | Kp: %.2f | Ki: %.2f | Kd: %.2f | Setpoint: %.2f \n", Kp, Ki, Kd, setpoint);
+    Serial.printf("Web Update | Kp: %.2f | Ki: %.2f | Kd: %.2f | Setpoint: %.2f | TKP: %.2f | TKD: %.2f\n", Kp, Ki, Kd, setpoint, K_YAW, K_DAMP);
 
     server.send(200, "text/html", getWebPage());
   });
@@ -303,6 +314,17 @@ void loop()
     Vec3 accelRobot = matMul(R_sensor_to_robot, accelRaw);
     Vec3 gyroRobot  = matMul(R_sensor_to_robot, gyroRaw);
 
+	/*
+    //Estimate angles - NOT MY CODE
+    float accPitch = atan2(a.acceleration.x, a.acceleration.z) * 180 / PI;
+    float accRoll  = atan2(-a.acceleration.y, a.acceleration.x) * 180 / PI;
+    // Complementary filter: combine gyro and accelerometer
+    pitch = alpha * (pitch + g.gyro.y * DT * 180 / PI) + (1 - alpha) * accPitch;
+    roll  = alpha * (roll  + g.gyro.z * DT * 180 / PI) + (1 - alpha) * accRoll;
+    yaw += g.gyro.x * DT * 180 / PI; // Yaw only from gyro → will drift
+
+    yawX = gyroRobot.x; */
+
     // Use corrected robot-frame axes
     float accel_tilt = atan2(accelRobot.x, accelRobot.z) * 180.0 / PI;
     float gyro_tilt  = -gyroRobot.y * 180.0 / PI;
@@ -310,16 +332,23 @@ void loop()
     // Complementary filter
     tiltx = (1.0 - C) * accel_tilt + C * (tiltx + gyro_tilt * DT);
 
-    //Track yaw for the 90 degree turn
-    current_heading += gyroRobot.z * (180.0 / PI) * DT;
+    //Track yaw for the 90 degree turn (x is the yaw axis)
+    yawRate = gyroRobot.x * (180.0 / PI);
+    if (abs(yawRate) < 0.5) { //ignore microjitters
+      yawRate = 0.0;
+    }
+    current_heading += yawRate * DT;
     if (is_turning) {
         float heading_error = target_heading - current_heading;
-        steering_offset = K_YAW * heading_error;
+		while (heading_error > 180.0) heading_error -= 360.0;
+		while (heading_error < -180.0) heading_error += 360.0;
+        steering_offset = -(K_YAW * heading_error) + (K_DAMP * yawRate); //PD controller
         steering_offset = constrain(steering_offset, -TURN_SPEED, TURN_SPEED);
 
-        if (abs(heading_error) < 1.0) { //Stop turning if within 1 degree of target
+        if (abs(heading_error) < 1.0 && abs(yawRate) < 5.0) { //Stop turning if within 1 degree of target and rotation is slow
             is_turning = false;
             steering_offset = 0.0;
+            current_heading = target_heading;
         }
     }
 
@@ -340,7 +369,7 @@ void loop()
 
     if (millis() > outerLoopTimer) {
         outerLoopTimer += OUTER_LOOP_INTERVAL;
-        
+
         //Ramping the speed slowly
         float max_step = VELOCITY_RAMP_RATE * (OUTER_LOOP_INTERVAL/1000.0);
         if (current_target_velocity < target_drive_velocity) {
@@ -432,7 +461,8 @@ void loop()
 
     uint16_t rawAdc = readADC(0);
     float voltage = (rawAdc * VREF) / 4095.0;
-
+    //Serial.println(yawRate);
+    //Serial.printf("Yawrate %.2f | heading %.2f\n", yawRate, current_heading);
     //Serial.printf("Tilt: %.2f | Set: %.2f | Vel: %.2f | Accel: %.2f | Active: %d | BattADC: %.2fV\n",tiltx, setpoint, integrated_velocity, target_accel, robot_active, voltage);
   }
 }
