@@ -29,7 +29,7 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
   </div>
 
   <div class="dpad">
-    <div class="empty"></div><button id="up" class="btn">&#9650;</button><div class="empty"></div>
+    <button id="turn2" class="btn">&#8634;</button><button id="up" class="btn">&#9650;</button><button id="turn1" class="btn">&#8635;</button>
     <button id="left" class="btn">&#9664;</button><button id="stop" class="btn" style="background:#666;">&#9632;</button><button id="right" class="btn">&#9654;</button>
     <div class="empty"></div><button id="down" class="btn">&#9660;</button><div class="empty"></div>
   </div>
@@ -39,7 +39,8 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
     <b>Ki:</b> <input type='number' step='0.01' name='i' value='%KI%'>
     <b>Kd:</b> <input type='number' step='0.01' name='d' value='%KD%'>
     <b>Setpoint:</b> <input type='number' step='0.01' name='t' value='%SP%'>
-    <b>Kv:</b> <input type='number' step='0.01' name='v' value='%KV%'>
+    <b>Turning Kp:</b> <input type='number' step='0.01' name='tkp' value='%TKP%'>
+    <b>Turning Kd:</b> <input type='number' step='0.01' name='tkd' value='%TKD%'>
     <input type='submit' class='btn update-btn' value='UPDATE PID'>
   </form>
   
@@ -89,7 +90,7 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
       el.addEventListener('mouseleave', release); 
     }
     window.onload = () => {
-      bindBtn('up', 'F'); bindBtn('down', 'B'); bindBtn('left', 'L'); bindBtn('right', 'R');
+      bindBtn('up', 'F'); bindBtn('down', 'B'); bindBtn('left', 'L'); bindBtn('right', 'R'); bindBtn('turn1','T1'); bindBtn('turn2', 'T2');
       document.getElementById('stop').onclick = (e) => { e.preventDefault(); fetch('/control?dir=S'); };
     };
 </script>
