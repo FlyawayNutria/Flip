@@ -76,10 +76,12 @@ float setpoint = 88.0;
 float tiltx = 0.0;
 float target_accel = 0.0;
 bool robot_active = false;
+bool position_hold = false; //I acc hate this sm so have to toggle it off for driving.
 
 float error_old = 0.0;
 float error_integral = 0.0;
 float integrated_velocity = 0.0;
+float velocity_integral = 0.0;
 
 const float MAX_INTEGRAL = 50.0;
 const float MAX_ACCEL = 1000.0;
@@ -92,6 +94,7 @@ float MAX_DRIVE_VELOCITY = 15.0;
 
 const float K_POS = 0.015; // position correction
 const float K_VEL = 0.20; // velocity correction
+const float K_VEL_I = 0.05;
 const float MAX_SETPOINT_SHIFT = 4.0;  // degrees
 
 // Dynamic control variables
@@ -138,7 +141,6 @@ String getWebPage() {
 bool TimerHandler(void * timerNo) {
   step1.runStepper();
   step2.runStepper();
-
   return true;
 }
 
@@ -236,6 +238,7 @@ void setup()
       else if (dir == "R") { target_drive_velocity = 0.0; steering_offset = TURN_SPEED; is_turning = false; }
       else if (dir == "T1" && !is_turning) { target_heading = current_heading - 90.0; is_turning = true; }//Turn 90 degrees CW
       else if (dir == "T2" && !is_turning) { target_heading = current_heading + 90.0; is_turning = true; } //Turn 90 degrees ACW
+	  else if (dir == "POS") { position_hold = !position_hold; } //Toggle return to position
       else {
         target_drive_velocity = 0.0;
         if (!is_turning) { steering_offset = 0.0; }
@@ -292,32 +295,20 @@ void loop()
     mpu.getEvent(&a, &g, &temp);
 
     // Raw MPU readings
-    Vec3 accelRaw = {
-      a.acceleration.x,
-      a.acceleration.y,
-      a.acceleration.z
-    };
-
-    Vec3 gyroRaw = {
-      g.gyro.x - GYRO_BIAS_X,
-      g.gyro.y - GYRO_BIAS_Y,
-      g.gyro.z - GYRO_BIAS_Z
-    };
-
-    // Correct raw sensor frame into robot frame
-    Vec3 accelRobot = matMul(R_sensor_to_robot, accelRaw);
+    Vec3 accelRaw = { a.acceleration.x, a.acceleration.y, a.acceleration.z };
+    Vec3 gyroRaw = { g.gyro.x - GYRO_BIAS_X, g.gyro.y - GYRO_BIAS_Y,g.gyro.z - GYRO_BIAS_Z };
+    Vec3 accelRobot = matMul(R_sensor_to_robot, accelRaw); //Correct for sensor calibration
     Vec3 gyroRobot  = matMul(R_sensor_to_robot, gyroRaw);
 
     // Use corrected robot-frame axes
     float accel_tilt = atan2(accelRobot.x, accelRobot.z) * 180.0 / PI;
     float gyro_tilt  = -gyroRobot.y * 180.0 / PI;
 
-    // Complementary filter
-    tiltx = (1.0 - C) * accel_tilt + C * (tiltx + gyro_tilt * DT);
+    tiltx = (1.0 - C) * accel_tilt + C * (tiltx + gyro_tilt * DT); //Complementary filter
 
     //Track yaw for the 90 degree turn (x is the yaw axis)
     yawRate = gyroRobot.x * (180.0 / PI);
-    if (abs(yawRate) < 0.5) { //ignore microjitters
+    if (abs(yawRate) < 0.5) { //ignore microjitters in turning
       yawRate = 0.0;
     }
     current_heading += yawRate * DT;
@@ -336,7 +327,7 @@ void loop()
     }
 
     // Estimate how far the robot has driven, using commanded wheel speed.
-    drive_velocity = integrated_velocity;
+    drive_velocity = -integrated_velocity;
 
     if (target_drive_velocity != 0.0) {
         is_holding = false;
@@ -353,21 +344,28 @@ void loop()
     if (millis() > outerLoopTimer) {
         outerLoopTimer += OUTER_LOOP_INTERVAL;
 
-        //Ramping the speed slowly
+        //Ramps current_target_velocity to avoid large instant changes.
         float max_step = VELOCITY_RAMP_RATE * (OUTER_LOOP_INTERVAL/1000.0);
         if (current_target_velocity < target_drive_velocity) {
             current_target_velocity = min(current_target_velocity + max_step, target_drive_velocity); //Add a step or become target
         } else if (current_target_velocity > target_drive_velocity) {
             current_target_velocity = max(current_target_velocity - max_step, target_drive_velocity);
         }
-        float velocity_error = drive_velocity - current_target_velocity;
-        dynamic_lean = K_VEL * velocity_error;
 
-        //float velocity_error = drive_velocity - target_drive_velocity;
-        dynamic_lean = K_VEL * velocity_error;
+        float velocity_error = current_target_velocity - drive_velocity;
+		//velocity_integral = 0.0;
 
-        if (is_holding) {
-           dynamic_lean += K_POS * drive_position;
+		if (target_drive_velocity == 0.0) {
+			velocity_integral *= 0.85; //Decay by 15% every loop
+		} else if (abs(velocity_error) < 4.0) {
+			velocity_integral += velocity_error * (OUTER_LOOP_INTERVAL/1000.0);
+			velocity_integral = constrain(velocity_integral, -MAX_SETPOINT_SHIFT, MAX_SETPOINT_SHIFT);
+		}
+
+		dynamic_lean = (K_VEL * velocity_error) + (K_VEL_I * velocity_integral);
+
+        if (is_holding && position_hold) {
+           dynamic_lean += K_POS * drive_position; //IDK IF IT NEEDS TO BE PLUS OR MINUS!!!!
         }
 
         dynamic_lean = constrain(dynamic_lean, -MAX_SETPOINT_SHIFT, MAX_SETPOINT_SHIFT);
@@ -386,6 +384,7 @@ void loop()
       error_old = 0.0;
       drive_position = 0.0;
       drive_velocity = 0.0;
+	  velocity_integral = 0.0;
 
       step1.setTargetSpeedRad(0.0);
       step2.setTargetSpeedRad(0.0);
@@ -405,6 +404,7 @@ void loop()
         is_turning = false;
         target_heading = current_heading;
         steering_offset = 0.0;
+		velocity_integral = 0.0;
 
         Serial.println("Bot armed");
       } else {
