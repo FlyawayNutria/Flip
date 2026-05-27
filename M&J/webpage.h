@@ -31,7 +31,7 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
   <div class="dpad">
     <button id="turn2" class="btn">&#8634;</button><button id="up" class="btn">&#9650;</button><button id="turn1" class="btn">&#8635;</button>
     <button id="left" class="btn">&#9664;</button><button id="stop" class="btn" style="background:#666;">&#9632;</button><button id="right" class="btn">&#9654;</button>
-    <div class="empty"></div><button id="down" class="btn">&#9660;</button><div class="empty"></div>
+    <div class="empty"></div><button id="down" class="btn">&#9660;</button><button id="pos" class="btn">HOLD</button>
   </div>
   
   <form action='/update' method='GET'>
@@ -90,7 +90,7 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
       el.addEventListener('mouseleave', release); 
     }
     window.onload = () => {
-      bindBtn('up', 'F'); bindBtn('down', 'B'); bindBtn('left', 'L'); bindBtn('right', 'R'); bindBtn('turn1','T1'); bindBtn('turn2', 'T2');
+      bindBtn('up', 'F'); bindBtn('down', 'B'); bindBtn('left', 'L'); bindBtn('right', 'R'); bindBtn('turn1','T1'); bindBtn('turn2', 'T2'); bindBtn('pos', 'POS');
       document.getElementById('stop').onclick = (e) => { e.preventDefault(); fetch('/control?dir=S'); };
     };
 </script>
