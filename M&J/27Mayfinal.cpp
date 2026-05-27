@@ -90,8 +90,8 @@ float drive_velocity = 0.0;
 float target_drive_velocity = 0.0;
 float MAX_DRIVE_VELOCITY = 15.0;
 
-const float K_POS = 0.015;   // position correction
-const float K_VEL = 0.20;    // velocity correction
+const float K_POS = 0.015; // position correction
+const float K_VEL = 0.20; // velocity correction
 const float MAX_SETPOINT_SHIFT = 4.0;  // degrees
 
 // Dynamic control variables
@@ -104,18 +104,12 @@ float current_setpoint = 0.0;
 bool is_holding = false; //Need this to tell when bot is still or not
 
 //Make a perfect 90 degree turn (for maze)
-float current_heading = 0.0;   //Absolute angle (degrees)
-float target_heading = 0.0;    //Desired angle
-bool is_turning = false;       //Flag
-float K_YAW = 0.07;      //Proportional gain for turning (tune ts) //0.07 and 0.02 works
+float current_heading = 0.0; //Absolute angle (degrees)
+float target_heading = 0.0; //Desired angle
+bool is_turning = false; //Flag
+float K_YAW = 0.07; //Proportional gain for turning (tune ts) //0.07 and 0.02 works
 float K_DAMP = 0.02; //Derivative gain for turning
-
-float yawX = 0.0;
 float yawRate = 0.0;
-float alpha = 0.98;
-float pitch = 0.0;
-float roll = 0.0;
-float yaw = 0.0;
 
 float current_target_velocity = 0.0;
 const float VELOCITY_RAMP_RATE = 30.0; //20
@@ -313,17 +307,6 @@ void loop()
     // Correct raw sensor frame into robot frame
     Vec3 accelRobot = matMul(R_sensor_to_robot, accelRaw);
     Vec3 gyroRobot  = matMul(R_sensor_to_robot, gyroRaw);
-
-	/*
-    //Estimate angles - NOT MY CODE
-    float accPitch = atan2(a.acceleration.x, a.acceleration.z) * 180 / PI;
-    float accRoll  = atan2(-a.acceleration.y, a.acceleration.x) * 180 / PI;
-    // Complementary filter: combine gyro and accelerometer
-    pitch = alpha * (pitch + g.gyro.y * DT * 180 / PI) + (1 - alpha) * accPitch;
-    roll  = alpha * (roll  + g.gyro.z * DT * 180 / PI) + (1 - alpha) * accRoll;
-    yaw += g.gyro.x * DT * 180 / PI; // Yaw only from gyro → will drift
-
-    yawX = gyroRobot.x; */
 
     // Use corrected robot-frame axes
     float accel_tilt = atan2(accelRobot.x, accelRobot.z) * 180.0 / PI;
