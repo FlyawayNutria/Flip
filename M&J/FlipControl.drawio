@@ -1,0 +1,140 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:148.0) Gecko/20100101 Firefox/148.0" pages="2">
+  <diagram name="Page-1" id="RnhZagTVsBOPnSw0OJXw">
+    <mxGraphModel dx="1493" dy="668" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="0" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="J0_O9yzkp8hSlDCnPXpv-6" parent="1" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fontFamily=Helvetica;" value="+" vertex="1">
+          <mxGeometry height="30" width="30" x="600" y="175" as="geometry" />
+        </mxCell>
+        <mxCell id="J0_O9yzkp8hSlDCnPXpv-8" parent="1" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontFamily=Helvetica;" value="&lt;div&gt;Measured&amp;nbsp;angle&lt;/div&gt;" vertex="1">
+          <mxGeometry height="30" width="110" x="640" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-23" edge="1" parent="1" source="J0_O9yzkp8hSlDCnPXpv-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="nPMMiLa-lfS4xZnfyson-22">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="J0_O9yzkp8hSlDCnPXpv-9" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;" value="PID controller" vertex="1">
+          <mxGeometry height="60" width="90" x="660" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="J0_O9yzkp8hSlDCnPXpv-10" edge="1" parent="1" source="J0_O9yzkp8hSlDCnPXpv-6" style="endArrow=classic;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontFamily=Helvetica;" target="J0_O9yzkp8hSlDCnPXpv-9" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="630" y="190" as="sourcePoint" />
+            <mxPoint x="660" y="190" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-36" edge="1" parent="1" source="J0_O9yzkp8hSlDCnPXpv-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="nPMMiLa-lfS4xZnfyson-35">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="J0_O9yzkp8hSlDCnPXpv-11" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;" value="Stepper Motors" vertex="1">
+          <mxGeometry height="60" width="110" x="1030" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="J0_O9yzkp8hSlDCnPXpv-15" edge="1" parent="1" source="nPMMiLa-lfS4xZnfyson-2" style="endArrow=classic;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;fontFamily=Helvetica;" target="J0_O9yzkp8hSlDCnPXpv-6" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <Array as="points">
+              <mxPoint x="615" y="260" />
+              <mxPoint x="615" y="240" />
+            </Array>
+            <mxPoint x="1010" y="280" as="sourcePoint" />
+            <mxPoint x="425" y="205" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="J0_O9yzkp8hSlDCnPXpv-24" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;" value="_" vertex="1">
+          <mxGeometry height="30" width="60" x="600" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="J0_O9yzkp8hSlDCnPXpv-25" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;" value="Motor Acceleration" vertex="1">
+          <mxGeometry height="30" width="90" x="760" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-1" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;" value="&lt;font&gt;Error&lt;/font&gt;" vertex="1">
+          <mxGeometry height="30" width="60" x="610" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-2" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="IMU (MPU6050)" vertex="1">
+          <mxGeometry height="60" width="105" x="925" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-7" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;" value="Target angle (setpoint)" vertex="1">
+          <mxGeometry height="30" width="120" x="500" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-28" edge="1" parent="1" source="nPMMiLa-lfS4xZnfyson-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0;entryDx=0;entryDy=0;" target="J0_O9yzkp8hSlDCnPXpv-24">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="560" y="190" />
+              <mxPoint x="560" y="190" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-9" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;" value="Outer loop velocity controller" vertex="1">
+          <mxGeometry height="60" width="100" x="414" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-13" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;" value="Target velocity" vertex="1">
+          <mxGeometry height="30" width="120" x="220" y="175" as="geometry" />
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-41" edge="1" parent="1" source="nPMMiLa-lfS4xZnfyson-14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="nPMMiLa-lfS4xZnfyson-9">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-14" parent="1" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fontFamily=Helvetica;" value="+" vertex="1">
+          <mxGeometry height="30" width="30" x="350" y="175" as="geometry" />
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-17" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;" value="&lt;font&gt;Error&lt;/font&gt;" vertex="1">
+          <mxGeometry height="30" width="60" x="360" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-18" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="320" y="189.66000000000003" as="sourcePoint" />
+            <mxPoint x="350" y="189.66000000000003" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-20" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;" value="Commanded Velocity" vertex="1">
+          <mxGeometry height="30" width="200" x="530" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-24" edge="1" parent="1" source="nPMMiLa-lfS4xZnfyson-22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="J0_O9yzkp8hSlDCnPXpv-11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-22" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;" value="Integrator" vertex="1">
+          <mxGeometry height="60" width="70" x="850" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-27" edge="1" parent="1" source="nPMMiLa-lfS4xZnfyson-25" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="nPMMiLa-lfS4xZnfyson-14">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="930" y="130" />
+              <mxPoint x="365" y="130" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-25" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;" value="Commanded Velocity" vertex="1">
+          <mxGeometry height="30" width="90" x="930" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-30" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;" value="_" vertex="1">
+          <mxGeometry height="30" width="60" x="350" y="145" as="geometry" />
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-40" edge="1" parent="1" source="nPMMiLa-lfS4xZnfyson-35" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" target="nPMMiLa-lfS4xZnfyson-2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-35" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fontFamily=Helvetica;" value="Robot (plant)" vertex="1">
+          <mxGeometry height="60" width="110" x="1230" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-37" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;" value="Wheel speed" vertex="1">
+          <mxGeometry height="30" width="90" x="1140" y="160" as="geometry" />
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-38" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="nPMMiLa-lfS4xZnfyson-35" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="1285" y="140" as="sourcePoint" />
+            <mxPoint x="1320" y="60" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-39" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;" value="External forces" vertex="1">
+          <mxGeometry height="30" width="90" x="1240" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="nPMMiLa-lfS4xZnfyson-42" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontFamily=Helvetica;" value="Physical lean of robot" vertex="1">
+          <mxGeometry height="30" width="150" x="1120" y="230" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="zbB9WMrgFaRqofTy0rDw" name="Page-2">
+    <mxGraphModel dx="1500" dy="568" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
