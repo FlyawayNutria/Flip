@@ -110,8 +110,8 @@ bool is_holding = false; //Need this to tell when bot is still or not
 float current_heading = 0.0; //Absolute angle (degrees)
 float target_heading = 0.0; //Desired angle
 bool is_turning = false; //Flag
-float K_YAW = 0.07; //Proportional gain for turning (tune ts) //0.07 and 0.02 works
-float K_DAMP = 0.02; //Derivative gain for turning
+float K_YAW = 0.06; //Proportional gain for turning (tune ts) //0.07 and 0.02 works
+float K_DAMP = 0.01; //Derivative gain for turning
 float yawRate = 0.0;
 
 float current_target_velocity = 0.0;
@@ -314,12 +314,12 @@ void loop()
     current_heading += yawRate * DT;
     if (is_turning) {
         float heading_error = target_heading - current_heading;
-		while (heading_error > 180.0) heading_error -= 360.0;
-		while (heading_error < -180.0) heading_error += 360.0;
+        while (heading_error > 180.0) heading_error -= 360.0;
+        while (heading_error < -180.0) heading_error += 360.0;
         steering_offset = -(K_YAW * heading_error) + (K_DAMP * yawRate); //PD controller
         steering_offset = constrain(steering_offset, -TURN_SPEED, TURN_SPEED);
 
-        if (abs(heading_error) < 1.0 && abs(yawRate) < 5.0) { //Stop turning if within 1 degree of target and rotation is slow
+        if (abs(heading_error) < 2.0 && abs(yawRate) < 7.0) { //Stop turning if within 2 degree of target and rotation is slow
             is_turning = false;
             steering_offset = 0.0;
             current_heading = target_heading;
