@@ -93,8 +93,8 @@ float target_drive_velocity = 0.0;
 float MAX_DRIVE_VELOCITY = 15.0;
 
 const float K_POS = 0.015; // position correction
-const float K_VEL = 0.20; // velocity correction
-const float K_VEL_I = 0.05;
+const float K_VEL = 0.15; // velocity correction
+const float K_VEL_I = 0.02;
 const float MAX_SETPOINT_SHIFT = 4.0;  // degrees
 
 // Dynamic control variables
@@ -115,7 +115,7 @@ float K_DAMP = 0.01; //Derivative gain for turning
 float yawRate = 0.0;
 
 float current_target_velocity = 0.0;
-const float VELOCITY_RAMP_RATE = 30.0; //20
+const float VELOCITY_RAMP_RATE = 10.0; //20
 
 ESP32Timer ITimer(3);
 Adafruit_MPU6050 mpu;
@@ -331,7 +331,7 @@ void loop()
 
     if (target_drive_velocity != 0.0) {
         is_holding = false;
-    } else if (abs(drive_velocity) < 1.0 && !is_holding) { //Robot has braked to a near stop, and no longer controlling
+    } else if (abs(current_target_velocity) < 0.1 && abs(drive_velocity) < 1.0 && !is_holding) { //Robot has braked to a near stop, and no longer controlling
         is_holding = true; //Lock position now
     }
 
@@ -352,20 +352,30 @@ void loop()
             current_target_velocity = max(current_target_velocity - max_step, target_drive_velocity);
         }
 
-        float velocity_error = current_target_velocity - drive_velocity;
-		//velocity_integral = 0.0;
-
 		if (target_drive_velocity == 0.0) {
-			velocity_integral *= 0.85; //Decay by 15% every loop
-		} else if (abs(velocity_error) < 4.0) {
+			//velocity_integral *= 0.85; //Decay by 15% every loop
+			current_target_velocity = 0.0; //Harsh ahh braking
+		} else { 
+			//Ramps current_target_velocity to avoid large instant changes.
+			float max_step = VELOCITY_RAMP_RATE * (OUTER_LOOP_INTERVAL/1000.0);
+			if (current_target_velocity < target_drive_velocity) {
+				current_target_velocity = min(current_target_velocity + max_step, target_drive_velocity); //Add a step or become target
+			} else if (current_target_velocity > target_drive_velocity) {
+				current_target_velocity = max(current_target_velocity - max_step, target_drive_velocity);
+			}
+		}
+		
+		float velocity_error = current_target_velocity - drive_velocity;
+
+		if (abs(velocity_error) < 4.0) {
 			velocity_integral += velocity_error * (OUTER_LOOP_INTERVAL/1000.0);
-			velocity_integral = constrain(velocity_integral, -MAX_SETPOINT_SHIFT, MAX_SETPOINT_SHIFT);
+			velocity_integral = constrain(velocity_integral, -1.5, 1.5); //Used to be constrained to MAXSETPOINTSHIFT
 		}
 
 		dynamic_lean = (K_VEL * velocity_error) + (K_VEL_I * velocity_integral);
 
         if (is_holding && position_hold) {
-           dynamic_lean += K_POS * drive_position; //IDK IF IT NEEDS TO BE PLUS OR MINUS!!!!
+           dynamic_lean -= K_POS * drive_position; //IDK IF IT NEEDS TO BE PLUS OR MINUS!!!!
         }
 
         dynamic_lean = constrain(dynamic_lean, -MAX_SETPOINT_SHIFT, MAX_SETPOINT_SHIFT);
