@@ -56,10 +56,12 @@ const int ADC_MOSI_PIN      = 23;
 
 const int TOGGLE_PIN        = 32;
 
-const int PRINT_INTERVAL      = 5000;
+const int PRINT_INTERVAL      = 50;
 const int LOOP_INTERVAL       = 10;
 const int OUTER_LOOP_INTERVAL = 50;
 const int STEPPER_INTERVAL_US = 20;
+
+const int analogPin = A3;
 
 const float VREF = 4.096;
 
@@ -163,6 +165,8 @@ uint16_t readADC(uint8_t channel) {
 void setup()
 {
   Serial.begin(115200);
+
+  pinMode(analogPin, INPUT);
 
   pinMode(TOGGLE_PIN, OUTPUT);
   pinMode(STEPPER_EN_PIN, OUTPUT);
@@ -364,7 +368,7 @@ void loop()
 				current_target_velocity = max(current_target_velocity - max_step, target_drive_velocity);
 			}
 		}
-		
+
 		float velocity_error = current_target_velocity - drive_velocity;
 
 		if (abs(velocity_error) < 4.0) {
@@ -451,9 +455,13 @@ void loop()
   // Debug print
   if (millis() > printTimer) {
     printTimer += PRINT_INTERVAL;
-
     uint16_t rawAdc = readADC(0);
     float voltage = (rawAdc * VREF) / 4095.0;
+
+	  int rawValue = analogRead(analogPin);
+	  float volt = (rawValue * 3.3) / 4095.0;
+	  //Serial.print(">volt:");
+	  //Serial.println(volt);
     //Serial.println(yawRate);
     //Serial.printf("Yawrate %.2f | heading %.2f\n", yawRate, current_heading);
     //Serial.printf("Tilt: %.2f | Set: %.2f | Vel: %.2f | Accel: %.2f | Active: %d | BattADC: %.2fV\n",tiltx, setpoint, integrated_velocity, target_accel, robot_active, voltage);
