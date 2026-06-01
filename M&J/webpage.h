@@ -10,7 +10,23 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
   <style>
     body { font-family: Arial; padding: 20px; max-width: 400px; margin: auto; text-align: center; }
     input { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
-    .btn { padding: 15px; font-size: 16px; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%; }
+    .btn {
+      padding: 15px;
+      font-size: 16px;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.1s ease;
+      box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+    }
+
+    .btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 rgba(0,0,0,0.2);
+      filter: brightness(0.8);
+    }
     .update-btn { background-color: #4CAF50; margin-bottom: 20px; }
     .stop-btn { background-color: #f44336; }
     .dpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 20px 0; }
@@ -19,10 +35,6 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
 </head>
 <body>
   <h2>Balance Bot Tuning</h2>
-  
-  <div style='background: #f4f4f4; padding: 15px; border-radius: 8px; margin-bottom: 20px;'>
-    <strong>Status: </strong> %STATUS%
-  </div>
 
   <div style='width:100%; height:250px; margin-bottom: 20px;'>
     <canvas id='tiltChart'></canvas>
@@ -31,9 +43,9 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
   <div class="dpad">
     <button id="turn2" class="btn">&#8634;</button><button id="up" class="btn">&#9650;</button><button id="turn1" class="btn">&#8635;</button>
     <button id="left" class="btn">&#9664;</button><button id="stop" class="btn" style="background:#666;">&#9632;</button><button id="right" class="btn">&#9654;</button>
-    <div class="empty"></div><button id="down" class="btn">&#9660;</button><button id="pos" class="btn">HOLD</button>
+    <div class="empty"></div><button id="down" class="btn">&#9660;</button><div class="empty"></div>
   </div>
-  
+
   <form action='/update' method='GET'>
     <b>Kp:</b> <input type='number' step='0.01' name='p' value='%KP%'>
     <b>Ki:</b> <input type='number' step='0.01' name='i' value='%KI%'>
@@ -49,6 +61,10 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
   <form action='/stop' method='GET'>
     <input type='submit' class='btn stop-btn' value='EMERGENCY STOP'>
   </form>
+
+  <button id="calibrateBtn" class="btn" style="background:#ff9800;">
+    Calibrate Gyro
+  </button>
 
 <script>
   const ctx = document.getElementById('tiltChart').getContext('2d');
@@ -90,8 +106,9 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
       el.addEventListener('mouseleave', release); 
     }
     window.onload = () => {
-      bindBtn('up', 'F'); bindBtn('down', 'B'); bindBtn('left', 'L'); bindBtn('right', 'R'); bindBtn('turn1','T1'); bindBtn('turn2', 'T2'); bindBtn('pos', 'POS');
+      bindBtn('up', 'F'); bindBtn('down', 'B'); bindBtn('left', 'L'); bindBtn('right', 'R'); bindBtn('turn1','T1'); bindBtn('turn2', 'T2');
       document.getElementById('stop').onclick = (e) => { e.preventDefault(); fetch('/control?dir=S'); };
+      document.getElementById('calibrateBtn').onclick = (e) => { e.preventDefault(); fetch('/calibrate'); };
     };
 </script>
 </body>
