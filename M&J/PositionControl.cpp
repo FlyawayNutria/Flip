@@ -410,6 +410,6 @@ void loop() {
 	//Debug print
 	if (millis() > printTimer) {
 		printTimer += PRINT_INTERVAL;
-		//Print something to serial
+		//Print something to serial monitor
 	}
 }
