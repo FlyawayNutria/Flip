@@ -68,7 +68,7 @@ const float C = 0.99;
 const float DT = (float)LOOP_INTERVAL / 1000.0;
 
 //Variables for inner loop balancing
-const float Kv = 5.0;
+float Kv = 5.0;
 float Kp = 24.0;
 float Ki = 0.00;
 float Kd = 0.6;
@@ -87,7 +87,7 @@ const float MAX_SPEED = 40.0;
 
 //Make a perfect 90 degree turn (for maze)
 float steering_offset = 0.0;
-const float TURN_SPEED = 4.5; //Max turn speed
+const float TURN_SPEED = 3.0; //Max turn speed
 float current_heading = 0.0; //Absolute angle (degrees)
 float target_heading = 0.0; //Desired angle
 bool is_turning = false; //Flag
@@ -126,6 +126,7 @@ String getWebPage() { //Pulls the webpage from webpage.h, and replaces placehold
 	html.replace("%KI%", String(Ki));
 	html.replace("%KD%", String(Kd));
 	html.replace("%SP%", String(setpoint));
+	html.replace("%KV%", String(Kv));
 	html.replace("%TKP%", String(K_YAW));
 	html.replace("%TKD%", String(K_DAMP));
 
@@ -194,7 +195,7 @@ void setup() {
 		Serial.print(".");
 	}
 	Serial.println("\n--- WIFI CONNECTED ---");
-	Serial.print("IP Address: ");
+	Serial.print("IP Address: http://");
 	Serial.println(WiFi.localIP());
 	uploadIP();
 
@@ -216,11 +217,12 @@ void setup() {
 		if (server.hasArg("i")) Ki = server.arg("i").toFloat();
 		if (server.hasArg("d")) Kd = server.arg("d").toFloat();
 		if (server.hasArg("t")) setpoint = server.arg("t").toFloat();
+		if (server.hasArg("v")) Kv = server.arg("v").toFloat();
 		if (server.hasArg("tkp")) K_YAW = server.arg("tkp").toFloat();
 		if (server.hasArg("tkd")) K_DAMP = server.arg("tkd").toFloat();
 
 		error_integral = 0.0;
-		Serial.printf("Web Update | Kp: %.2f | Ki: %.2f | Kd: %.2f | Setpoint: %.2f | TKP: %.2f | TKD: %.2f\n", Kp, Ki, Kd, setpoint, K_YAW, K_DAMP);
+		Serial.printf("Web Update | Kp: %.2f | Ki: %.2f | Kd: %.2f | Setpoint: %.2f | Kv: %.2f | TKP: %.2f | TKD: %.2f\n", Kp, Ki, Kd, setpoint, Kv, K_YAW, K_DAMP);
 
 		server.send(200, "text/html", getWebPage());
 	});
