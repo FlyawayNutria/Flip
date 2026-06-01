@@ -10,6 +10,8 @@
 #include <WiFi.h>
 #include "esp_wpa2.h"
 #include <WebServer.h>
+#include <HTTPClient.h> //Send IP to google sheet
+#include "calibrate.h" //Calibrate the MPU6050
 
 struct Vec3 { //3x1 vector
 	float x;
@@ -34,13 +36,14 @@ float R_sensor_to_robot[3][3] = {
 
 // Manually measured gyro bias, in rad/s.
 // These are subtracted from the raw gyro readings.
-const float GYRO_BIAS_X = -0.029064;
-const float GYRO_BIAS_Y = -0.012810;
-const float GYRO_BIAS_Z = -0.022884;
+float GYRO_BIAS_X = -0.029064;
+float GYRO_BIAS_Y = -0.012810;
+float GYRO_BIAS_Z = -0.022884;
 
 const char* ssid = WIFI_SSID;
 const char* username = WIFI_USER;
 const char* password = WIFI_PASS;
+const char* url = SCRIPT_URL; //Send IP to google sheet
 
 //Given pins
 const int STEPPER1_DIR_PIN  = 16;
@@ -99,6 +102,16 @@ const float MAX_TILT = 5.0; //5 degrees
 float target_drive_velocity = 0.0;
 float MAX_DRIVE_VELOCITY = 5.0;
 
+void uploadIP() { //Send IP to google sheet
+	HTTPClient http;
+	http.begin(url);
+	http.addHeader("Content-Type", "application/json");
+	String payload = "{\"device\":\"balancebot\"," "\"ip\":\"" + WiFi.localIP().toString() + "\"}";
+	int code = http.POST(payload);
+	Serial.printf("Upload result: %d\n", code);
+	http.end();
+}
+
 ESP32Timer ITimer(3);
 Adafruit_MPU6050 mpu;
 WebServer server(80);
@@ -115,7 +128,6 @@ String getWebPage() { //Pulls the webpage from webpage.h, and replaces placehold
 	html.replace("%SP%", String(setpoint));
 	html.replace("%TKP%", String(K_YAW));
 	html.replace("%TKD%", String(K_DAMP));
-	html.replace("%STATUS%", robot_active ? "<span style='color:green;'>ARMED</span>" : "<span style='color:red;'>STANDBY</span>");
 
 	return html;
 }
@@ -184,6 +196,7 @@ void setup() {
 	Serial.println("\n--- WIFI CONNECTED ---");
 	Serial.print("IP Address: ");
 	Serial.println(WiFi.localIP());
+	uploadIP();
 
 	server.on("/", []() {
 		server.send(200, "text/html", getWebPage());
@@ -230,6 +243,12 @@ void setup() {
 		server.send(200, "text/plain", "OK");
 	});
 
+	server.on("/calibrate", []() {
+		Serial.println("Web gyro calibration");
+		resetBot();
+		calibrateGyro();
+		server.send(200, "text/plain", "Calibration Complete");
+	});
 
 	server.on("/stop", []() {
 		resetBot();
