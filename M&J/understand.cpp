@@ -43,7 +43,6 @@ float GYRO_BIAS_Z = -0.022884;
 const char* ssid = WIFI_SSID;
 const char* username = WIFI_USER;
 const char* password = WIFI_PASS;
-const char* url = SCRIPT_URL; //Send IP to google sheet
 
 //Given pins
 const int STEPPER1_DIR_PIN  = 16;
@@ -102,16 +101,6 @@ const float MAX_TILT = 5.0; //5 degrees
 float target_drive_velocity = 0.0;
 float MAX_DRIVE_VELOCITY = 5.0;
 
-void uploadIP() { //Send IP to google sheet
-	HTTPClient http;
-	http.begin(url);
-	http.addHeader("Content-Type", "application/json");
-	String payload = "{\"device\":\"balancebot\"," "\"ip\":\"" + WiFi.localIP().toString() + "\"}";
-	int code = http.POST(payload);
-	Serial.printf("Upload result: %d\n", code);
-	http.end();
-}
-
 ESP32Timer ITimer(3);
 Adafruit_MPU6050 mpu;
 WebServer server(80);
@@ -137,6 +126,17 @@ bool TimerHandler(void * timerNo) {
 	step1.runStepper();
 	step2.runStepper();
 	return true;
+}
+
+//Used for closed loop turning
+void startSpotTurn(float deltaDeg) {
+  target_drive_velocity = 0.0;
+  dynamic_tilt = 0.0;
+
+  error_integral = 0.0;
+  steering_offset = 0.0;
+  target_heading = current_heading + deltaDeg;
+  is_turning = true;
 }
 
 void resetBot() {
@@ -197,7 +197,6 @@ void setup() {
 	Serial.println("\n--- WIFI CONNECTED ---");
 	Serial.print("IP Address: http://");
 	Serial.println(WiFi.localIP());
-	uploadIP();
 
 	server.on("/", []() {
 		server.send(200, "text/html", getWebPage());
@@ -235,8 +234,8 @@ void setup() {
 			else if (dir == "B") { target_drive_velocity = -MAX_DRIVE_VELOCITY; steering_offset = 0.0; is_turning = false; }
 			else if (dir == "L") { target_drive_velocity = 0.0; steering_offset = -TURN_SPEED; is_turning = false; }
 			else if (dir == "R") { target_drive_velocity = 0.0; steering_offset = TURN_SPEED; is_turning = false; }
-			else if (dir == "T1" && !is_turning) { target_heading = current_heading - 90.0; is_turning = true; }//Turn 90 degrees CW
-			else if (dir == "T2" && !is_turning) { target_heading = current_heading + 90.0; is_turning = true; } //Turn 90 degrees ACW
+			else if (dir == "T1" && !is_turning) { startSpotTurn(-90.0); }//target_heading = current_heading - 90.0; is_turning = true; }//Turn 90 degrees CW
+			else if (dir == "T2" && !is_turning) { startSpotTurn(90.0); }//target_heading = current_heading + 90.0; is_turning = true; } //Turn 90 degrees ACW
 			else {
 			target_drive_velocity = 0.0;
 			if (!is_turning) { steering_offset = 0.0; }
@@ -281,12 +280,18 @@ void loop() {
 	//Outer loop dynamic control
 	if (millis() > outerLoopTimer) {
 		outerLoopTimer += OUTER_LOOP_INTERVAL;
-		float leftSpeed = step1.getSpeedRad();
-		float rightSpeed = step2.getSpeedRad();
-		float drive_velocity = (leftSpeed - rightSpeed) * 0.5;
-		float velocity_error = target_drive_velocity - drive_velocity;
-		dynamic_tilt = velocity_gain * velocity_error;
-		dynamic_tilt = constrain(dynamic_tilt, -MAX_TILT, MAX_TILT);
+
+		if (is_turning) {
+			target_drive_velocity = 0.0;
+			dynamic_tilt = 0.0;
+		} else {
+			float leftSpeed = step1.getSpeedRad();
+			float rightSpeed = step2.getSpeedRad();
+			float drive_velocity = (leftSpeed - rightSpeed) * 0.5;
+			float velocity_error = target_drive_velocity - drive_velocity;
+			dynamic_tilt = velocity_gain * velocity_error;
+			dynamic_tilt = constrain(dynamic_tilt, -MAX_TILT, MAX_TILT);
+		}
 	}
 
 	//Inner loop balancing
