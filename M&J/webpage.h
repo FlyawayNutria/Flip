@@ -54,6 +54,8 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
     <b>Setpoint:</b> <input type='number' step='0.01' name='t' value='%SP%'>
     <b>Turning Kp:</b> <input type='number' step='0.01' name='tkp' value='%TKP%'>
     <b>Turning Kd:</b> <input type='number' step='0.01' name='tkd' value='%TKD%'>
+    <b>Velocity Kp:</b> <input type='number' step='0.01' name='vp' value='%VKP%'>
+    <b>Velocity Ki:</b> <input type='number' step='0.01' name='vi' value='%VKI%'>
     <input type='submit' class='btn update-btn' value='UPDATE PID'>
   </form>
   
