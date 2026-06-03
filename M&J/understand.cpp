@@ -43,6 +43,7 @@ float GYRO_BIAS_Z = -0.022884;
 const char* ssid = WIFI_SSID;
 const char* username = WIFI_USER;
 const char* password = WIFI_PASS;
+const char* url = SCRIPT_URL; //Send IP to google sheet
 
 //Given pins
 const int STEPPER1_DIR_PIN  = 16;
@@ -96,10 +97,23 @@ float yawRate = 0.0;
 
 //Dynamic control variables
 float dynamic_tilt = 0.0;
-float velocity_gain = 0.2;
+float vKp = 0.2;
+float vKi = 0.0;
+float v_error_integral = 0.0;
+const float oDT = (float)OUTER_LOOP_INTERVAL/1000.0;
 const float MAX_TILT = 5.0; //5 degrees
 float target_drive_velocity = 0.0;
 float MAX_DRIVE_VELOCITY = 5.0;
+
+void uploadIP() { //Send IP to google sheet
+	HTTPClient http;
+	http.begin(url);
+	http.addHeader("Content-Type", "application/json");
+	String payload = "{\"device\":\"balancebot\"," "\"ip\":\"" + WiFi.localIP().toString() + "\"}";
+	int code = http.POST(payload);
+	Serial.printf("Upload result: %d\n", code);
+	http.end();
+}
 
 ESP32Timer ITimer(3);
 Adafruit_MPU6050 mpu;
@@ -118,6 +132,8 @@ String getWebPage() { //Pulls the webpage from webpage.h, and replaces placehold
 	html.replace("%KV%", String(Kv));
 	html.replace("%TKP%", String(K_YAW));
 	html.replace("%TKD%", String(K_DAMP));
+	html.replace("%VKP%", String(vKp));
+	html.replace("%VKI%", String(vKi));
 
 	return html;
 }
@@ -130,13 +146,13 @@ bool TimerHandler(void * timerNo) {
 
 //Used for closed loop turning
 void startSpotTurn(float deltaDeg) {
-  target_drive_velocity = 0.0;
-  dynamic_tilt = 0.0;
-
-  error_integral = 0.0;
-  steering_offset = 0.0;
-  target_heading = current_heading + deltaDeg;
-  is_turning = true;
+	target_drive_velocity = 0.0;
+	dynamic_tilt = 0.0;
+	v_error_integral = 0.0;
+	error_integral = 0.0;
+	steering_offset = 0.0;
+	target_heading = current_heading + deltaDeg;
+	is_turning = true;
 }
 
 void resetBot() {
@@ -155,6 +171,7 @@ void resetBot() {
 	is_turning = false;
 	yawRate = 0.0;
 	dynamic_tilt = 0.0;
+	v_error_integral = 0.0;
 
 	step1.setTargetSpeedRad(0.0);
 	step2.setTargetSpeedRad(0.0);
@@ -197,6 +214,7 @@ void setup() {
 	Serial.println("\n--- WIFI CONNECTED ---");
 	Serial.print("IP Address: http://");
 	Serial.println(WiFi.localIP());
+	uploadIP();
 
 	server.on("/", []() {
 		server.send(200, "text/html", getWebPage());
@@ -217,11 +235,14 @@ void setup() {
 		if (server.hasArg("d")) Kd = server.arg("d").toFloat();
 		if (server.hasArg("t")) setpoint = server.arg("t").toFloat();
 		if (server.hasArg("v")) Kv = server.arg("v").toFloat();
+		if (server.hasArg("vp")) vKp = server.arg("vp").toFloat();
+		if (server.hasArg("vi")) vKi = server.arg("vi").toFloat();
 		if (server.hasArg("tkp")) K_YAW = server.arg("tkp").toFloat();
 		if (server.hasArg("tkd")) K_DAMP = server.arg("tkd").toFloat();
 
 		error_integral = 0.0;
-		Serial.printf("Web Update | Kp: %.2f | Ki: %.2f | Kd: %.2f | Setpoint: %.2f | Kv: %.2f | TKP: %.2f | TKD: %.2f\n", Kp, Ki, Kd, setpoint, Kv, K_YAW, K_DAMP);
+		v_error_integral = 0.0;
+		Serial.printf("Web Update | Kp: %.2f | Ki: %.2f | Kd: %.2f | Setpoint: %.2f | Kv: %.2f | TKP: %.2f | TKD: %.2f | VKP: %.2f | VKI: %.2f\n", Kp, Ki, Kd, setpoint, Kv, K_YAW, K_DAMP, vKp, vKi);
 
 		server.send(200, "text/html", getWebPage());
 	});
@@ -289,7 +310,9 @@ void loop() {
 			float rightSpeed = step2.getSpeedRad();
 			float drive_velocity = (leftSpeed - rightSpeed) * 0.5;
 			float velocity_error = target_drive_velocity - drive_velocity;
-			dynamic_tilt = velocity_gain * velocity_error;
+			v_error_integral += velocity_error * oDT;
+			v_error_integral = constrain(v_error_integral, -MAX_INTEGRAL, MAX_INTEGRAL);
+			dynamic_tilt = vKp * velocity_error + vKi * v_error_integral;
 			dynamic_tilt = constrain(dynamic_tilt, -MAX_TILT, MAX_TILT);
 		}
 	}
