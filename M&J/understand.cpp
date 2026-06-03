@@ -104,6 +104,17 @@ const float oDT = (float)OUTER_LOOP_INTERVAL/1000.0;
 const float MAX_TILT = 5.0; //5 degrees
 float target_drive_velocity = 0.0;
 float MAX_DRIVE_VELOCITY = 5.0;
+bool driving = false;
+bool braking = false;
+const float brake_threshold = 0.15;
+
+void clearDrive() {
+    target_drive_velocity = 0.0;
+    dynamic_tilt = 0.0;
+    v_error_integral = 0.0;
+    driving = false;
+    braking = false;
+}
 
 void uploadIP() { //Send IP to google sheet
 	HTTPClient http;
@@ -146,9 +157,7 @@ bool TimerHandler(void * timerNo) {
 
 //Used for closed loop turning
 void startSpotTurn(float deltaDeg) {
-	target_drive_velocity = 0.0;
-	dynamic_tilt = 0.0;
-	v_error_integral = 0.0;
+	clearDrive();
 	error_integral = 0.0;
 	steering_offset = 0.0;
 	target_heading = current_heading + deltaDeg;
@@ -170,8 +179,7 @@ void resetBot() {
 	target_drive_velocity = 0.0;
 	is_turning = false;
 	yawRate = 0.0;
-	dynamic_tilt = 0.0;
-	v_error_integral = 0.0;
+	clearDrive();
 
 	step1.setTargetSpeedRad(0.0);
 	step2.setTargetSpeedRad(0.0);
@@ -251,15 +259,20 @@ void setup() {
 		if (server.hasArg("dir")) {
 			String dir = server.arg("dir");
 			Serial.println(dir);
-			if (dir == "F") { target_drive_velocity = MAX_DRIVE_VELOCITY; steering_offset = 0.0; is_turning = false; }
-			else if (dir == "B") { target_drive_velocity = -MAX_DRIVE_VELOCITY; steering_offset = 0.0; is_turning = false; }
-			else if (dir == "L") { target_drive_velocity = 0.0; steering_offset = -TURN_SPEED; is_turning = false; }
-			else if (dir == "R") { target_drive_velocity = 0.0; steering_offset = TURN_SPEED; is_turning = false; }
+			if (dir == "F") { target_drive_velocity = MAX_DRIVE_VELOCITY; steering_offset = 0.0; is_turning = false; driving = true; braking = false; }
+			else if (dir == "B") { target_drive_velocity = -MAX_DRIVE_VELOCITY; steering_offset = 0.0; is_turning = false; driving = true; braking = false; }
+			else if (dir == "L") { clearDrive(); steering_offset = -TURN_SPEED; is_turning = false; }
+			else if (dir == "R") { clearDrive(); steering_offset = TURN_SPEED; is_turning = false; }
 			else if (dir == "T1" && !is_turning) { startSpotTurn(-90.0); }//target_heading = current_heading - 90.0; is_turning = true; }//Turn 90 degrees CW
 			else if (dir == "T2" && !is_turning) { startSpotTurn(90.0); }//target_heading = current_heading + 90.0; is_turning = true; } //Turn 90 degrees ACW
 			else {
-			target_drive_velocity = 0.0;
-			if (!is_turning) { steering_offset = 0.0; }
+                if (driving) {
+                    driving = false;
+                    braking = true;
+                    target_drive_velocity = 0.0;
+                    v_error_integral = 0.0;
+                } else { clearDrive();}
+			    if (!is_turning) { steering_offset = 0.0; }
 			} //Do nothing
 		}
 		server.send(200, "text/plain", "OK");
@@ -287,8 +300,8 @@ void setup() {
 
 	Serial.println("Initialised Interrupt for Stepper");
 
-	step1.setAccelerationRad(2000.0);
-	step2.setAccelerationRad(2000.0);
+	step1.setAccelerationRad(1000.0);
+	step2.setAccelerationRad(1000.0);
 
 	digitalWrite(STEPPER_EN_PIN, LOW); // enable driver after setup
 }
@@ -303,17 +316,37 @@ void loop() {
 		outerLoopTimer += OUTER_LOOP_INTERVAL;
 
 		if (is_turning) {
-			target_drive_velocity = 0.0;
-			dynamic_tilt = 0.0;
+			clearDrive();
 		} else {
 			float leftSpeed = step1.getSpeedRad();
 			float rightSpeed = step2.getSpeedRad();
 			float drive_velocity = (leftSpeed - rightSpeed) * 0.5;
-			float velocity_error = target_drive_velocity - drive_velocity;
-			v_error_integral += velocity_error * oDT;
-			v_error_integral = constrain(v_error_integral, -MAX_INTEGRAL, MAX_INTEGRAL);
-			dynamic_tilt = vKp * velocity_error + vKi * v_error_integral;
-			dynamic_tilt = constrain(dynamic_tilt, -MAX_TILT, MAX_TILT);
+
+            //More code to stop outer loop when balancing
+            bool outerLoopActive = false;
+            if (driving) {
+                outerLoopActive = true;
+            } else if (braking) {
+                target_drive_velocity = 0.0;
+                if (abs(drive_velocity) < brake_threshold) {
+                    braking = false;
+                    clearDrive();
+                } else {
+                    outerLoopActive = true;
+                }
+            }
+
+            if (outerLoopActive) {
+
+                float velocity_error = target_drive_velocity - drive_velocity;
+                v_error_integral += velocity_error * oDT;
+                v_error_integral = constrain(v_error_integral, -MAX_INTEGRAL, MAX_INTEGRAL);
+                dynamic_tilt = vKp * velocity_error + vKi * v_error_integral;
+                dynamic_tilt = constrain(dynamic_tilt, -MAX_TILT, MAX_TILT);
+            } else {
+                dynamic_tilt = 0.0;
+                v_error_integral = 0.0;
+            }    
 		}
 	}
 
