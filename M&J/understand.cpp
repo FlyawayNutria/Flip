@@ -8,7 +8,6 @@
 #include <webpage.h>
 
 #include <WiFi.h>
-#include "esp_wpa2.h"
 #include <WebServer.h>
 #include <HTTPClient.h> //Send IP to google sheet
 #include "calibrate.h" //Calibrate the MPU6050
@@ -35,22 +34,22 @@ float R_sensor_to_robot[3][3] = {
 };
 
 // Manually measured gyro bias, in rad/s.
-// These are subtracted from the raw gyro readings.
+// These are subtracted from the raw gyro readings.  
 float GYRO_BIAS_X = -0.029064;
 float GYRO_BIAS_Y = -0.012810;
 float GYRO_BIAS_Z = -0.022884;
 
 const char* ssid = WIFI_SSID;
-const char* username = WIFI_USER;
 const char* password = WIFI_PASS;
 const char* url = SCRIPT_URL; //Send IP to google sheet
 
 //Given pins
-const int STEPPER1_DIR_PIN  = 16;
-const int STEPPER1_STEP_PIN = 17;
-const int STEPPER2_DIR_PIN  = 4;
-const int STEPPER2_STEP_PIN = 14;
-const int STEPPER_EN_PIN    = 15;
+const int STEPPER1_DIR_PIN  = 16; //D1
+const int STEPPER1_STEP_PIN = 17; //S1 
+const int STEPPER2_DIR_PIN  = 4; //D2
+const int STEPPER2_STEP_PIN = 14; //S2
+const int STEPPER_EN_PIN    = 27; //EN
+
 const int ADC_CS_PIN        = 5;
 const int ADC_SCK_PIN       = 18;
 const int ADC_MISO_PIN      = 19;
@@ -206,15 +205,11 @@ void setup() {
 	mpu.setGyroRange(MPU6050_RANGE_250_DEG);
 	mpu.setFilterBandwidth(MPU6050_BAND_44_HZ);
 
-	//Connect to Imperial-WPA
-	Serial.print("Connecting to WPA2 Enterprise WiFi");
+	//Connect to WiFi
+	Serial.print("Connecting to WiFi");
 	WiFi.disconnect(true);
 	WiFi.mode(WIFI_STA);
-	esp_wifi_sta_wpa2_ent_set_identity((uint8_t *)WIFI_USER,strlen(WIFI_USER));
-	esp_wifi_sta_wpa2_ent_set_username((uint8_t *)WIFI_USER,strlen(WIFI_USER));
-	esp_wifi_sta_wpa2_ent_set_password((uint8_t *)WIFI_PASS,strlen(WIFI_PASS));
-	esp_wifi_sta_wpa2_ent_enable();
-	WiFi.begin(WIFI_SSID);
+	WiFi.begin(ssid, password);
 	while (WiFi.status() != WL_CONNECTED) {
 		delay(500);
 		Serial.print(".");
