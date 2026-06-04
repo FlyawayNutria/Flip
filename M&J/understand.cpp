@@ -100,7 +100,7 @@ float yawRate = 0.0;
 float dynamic_tilt = 0.0;
 float vKp = 0.2;
 float vKi = 0.0;
-float v_error_integral = 0.0;
+float target_pos = 0.0; //rad
 const float oDT = (float)OUTER_LOOP_INTERVAL/1000.0;
 const float MAX_TILT = 5.0; //5 degrees
 float target_drive_velocity = 0.0;
@@ -108,14 +108,6 @@ float MAX_DRIVE_VELOCITY = 5.0;
 bool driving = false;
 bool braking = false;
 const float brake_threshold = 0.15;
-
-void clearDrive() {
-    target_drive_velocity = 0.0;
-    dynamic_tilt = 0.0;
-    v_error_integral = 0.0;
-    driving = false;
-    braking = false;
-}
 
 void uploadIP() { //Send IP to google sheet
 	HTTPClient http;
@@ -133,6 +125,17 @@ WebServer server(80);
 
 step step1(STEPPER_INTERVAL_US, STEPPER1_STEP_PIN, STEPPER1_DIR_PIN);
 step step2(STEPPER_INTERVAL_US, STEPPER2_STEP_PIN, STEPPER2_DIR_PIN);
+
+float getPos() {
+    return (step1.getPositionRad() - step2.getPositionRad()) / 2.0;
+}
+
+void clearDrive() {
+    target_drive_velocity = 0.0;
+    driving = false;
+    braking = false;
+    target_pos = getPos();
+}
 
 String getWebPage() { //Pulls the webpage from webpage.h, and replaces placeholders
 	String html = FPSTR(WEBPAGE_HTML);
@@ -250,7 +253,6 @@ void setup() {
 		if (server.hasArg("tkd")) K_DAMP = server.arg("tkd").toFloat();
 
 		error_integral = 0.0;
-		v_error_integral = 0.0;
 		Serial.printf("Web Update | Kp: %.2f | Ki: %.2f | Kd: %.2f | Setpoint: %.2f | Kv: %.2f | TKP: %.2f | TKD: %.2f | VKP: %.2f | VKI: %.2f\n", Kp, Ki, Kd, setpoint, Kv, K_YAW, K_DAMP, vKp, vKi);
 
 		server.send(200, "text/html", getWebPage());
@@ -262,18 +264,17 @@ void setup() {
 			Serial.println(dir);
 			if (dir == "F") { target_drive_velocity = MAX_DRIVE_VELOCITY; steering_offset = 0.0; is_turning = false; driving = true; braking = false; }
 			else if (dir == "B") { target_drive_velocity = -MAX_DRIVE_VELOCITY; steering_offset = 0.0; is_turning = false; driving = true; braking = false; }
-			else if (dir == "L") { clearDrive(); steering_offset = -TURN_SPEED; is_turning = false; }
-			else if (dir == "R") { clearDrive(); steering_offset = TURN_SPEED; is_turning = false; }
-			else if (dir == "T1" && !is_turning) { startSpotTurn(-90.0); }//target_heading = current_heading - 90.0; is_turning = true; }//Turn 90 degrees CW
-			else if (dir == "T2" && !is_turning) { startSpotTurn(90.0); }//target_heading = current_heading + 90.0; is_turning = true; } //Turn 90 degrees ACW
+			else if (dir == "L") { clearDrive(); steering_offset = TURN_SPEED; is_turning = false; }
+			else if (dir == "R") { clearDrive(); steering_offset = -TURN_SPEED; is_turning = false; }
+			else if (dir == "T1" && !is_turning) { startSpotTurn(90.0); }//target_heading = current_heading - 90.0; is_turning = true; }//Turn 90 degrees CW
+			else if (dir == "T2" && !is_turning) { startSpotTurn(-90.0); }//target_heading = current_heading + 90.0; is_turning = true; } //Turn 90 degrees ACW
 			else {
                 if (driving) {
                     driving = false;
                     braking = true;
                     target_drive_velocity = 0.0;
-                    v_error_integral = 0.0;
                 } else { clearDrive();}
-			    if (!is_turning) { steering_offset = 0.0; }
+			        if (!is_turning) { steering_offset = 0.0; }
 			} //Do nothing
 		}
 		server.send(200, "text/plain", "OK");
@@ -316,39 +317,34 @@ void loop() {
 	if (millis() > outerLoopTimer) {
 		outerLoopTimer += OUTER_LOOP_INTERVAL;
 
-		if (is_turning) {
-			clearDrive();
-		} else {
-			float leftSpeed = step1.getSpeedRad();
-			float rightSpeed = step2.getSpeedRad();
-			float drive_velocity = (leftSpeed - rightSpeed) * 0.5;
-
-            //More code to stop outer loop when balancing
-            bool outerLoopActive = false;
-            if (driving) {
+        float leftSpeed = step1.getSpeedRad();
+        float rightSpeed = step2.getSpeedRad();
+        float drive_velocity = (leftSpeed - rightSpeed) * 0.5;
+        float current_pos = getPos();
+        bool outerLoopActive = false;
+        if (driving) {
+            outerLoopActive = true;
+            target_pos = current_pos;
+        } else if (braking) {
+            target_drive_velocity = 0.0;
+            if (abs(drive_velocity) < brake_threshold) {
+                braking = false;
+                clearDrive();
+            } else { //Stationary or turning
                 outerLoopActive = true;
-            } else if (braking) {
                 target_drive_velocity = 0.0;
-                if (abs(drive_velocity) < brake_threshold) {
-                    braking = false;
-                    clearDrive();
-                } else {
-                    outerLoopActive = true;
-                }
             }
+        }
 
-            if (outerLoopActive) {
-
-                float velocity_error = target_drive_velocity - drive_velocity;
-                v_error_integral += velocity_error * oDT;
-                v_error_integral = constrain(v_error_integral, -MAX_INTEGRAL, MAX_INTEGRAL);
-                dynamic_tilt = vKp * velocity_error + vKi * v_error_integral;
-                dynamic_tilt = constrain(dynamic_tilt, -MAX_TILT, MAX_TILT);
-            } else {
-                dynamic_tilt = 0.0;
-                v_error_integral = 0.0;
-            }    
-		}
+        if (outerLoopActive) {
+            float velocity_error = target_drive_velocity - drive_velocity;
+            float position_error = target_pos - current_pos;
+            position_error = constrain(position_error, -MAX_INTEGRAL, MAX_INTEGRAL);
+            dynamic_tilt = (vKp * velocity_error) + (vKi * position_error);
+            dynamic_tilt = constrain(dynamic_tilt, -MAX_TILT, MAX_TILT);
+        } else {
+            dynamic_tilt = 0.0;
+        }
 	}
 
 	//Inner loop balancing
@@ -380,8 +376,13 @@ void loop() {
 			float heading_error = target_heading - current_heading;
 			while (heading_error > 180.0) heading_error -= 360.0;
 			while (heading_error < -180.0) heading_error += 360.0;
-			steering_offset = -(K_YAW * heading_error) + (K_DAMP * yawRate); //PD controller
-			steering_offset = constrain(steering_offset, -TURN_SPEED, TURN_SPEED);
+			//steering_offset = -(K_YAW * heading_error) + (K_DAMP * yawRate); //PD controller //Here might have to flip signs
+			if (abs(heading_error) < 2.0) {
+                steering_offset = (K_DAMP * yawRate); //Purely a D controller when close to end of turn
+            } else {
+                steering_offset = -(K_YAW * heading_error) + (K_DAMP * yawRate); //PD controller as per
+            }
+            steering_offset = constrain(steering_offset, -TURN_SPEED, TURN_SPEED);
 
 			if (abs(heading_error) < 2.0 && abs(yawRate) < 7.0) { //Stop turning if within 2 degree of target and rotation is slow
 				is_turning = false;
