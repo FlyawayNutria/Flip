@@ -1,6 +1,3 @@
-#pragma once
-#include <Arduino.h>
-
 const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html>
@@ -20,6 +17,7 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
       width: 100%;
       transition: all 0.1s ease;
       box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+      margin-bottom: 10px;
     }
 
     .btn:active {
@@ -27,18 +25,39 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
       box-shadow: 0 1px 0 rgba(0,0,0,0.2);
       filter: brightness(0.8);
     }
+
     .update-btn { background-color: #4CAF50; margin-bottom: 20px; }
     .stop-btn { background-color: #f44336; }
+    .gyro-btn { background-color: #ff9800; }
     .dpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 20px 0; }
+    .dpad .btn { margin-bottom: 0; }
+    .status-box {
+      background: #f2f2f2;
+      padding: 10px;
+      border-radius: 5px;
+      margin-bottom: 15px;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    .status-armed { color: #4CAF50; }
+    .status-disarmed { color: #f44336; }
   </style>
   <script src='https://cdn.jsdelivr.net/npm/chart.js'></script>
 </head>
 <body>
   <h2>Balance Bot Tuning</h2>
 
+  <div class="status-box">
+    Status: <span id="statusText" class="status-disarmed">DISARMED</span>
+  </div>
+
   <div style='width:100%; height:250px; margin-bottom: 20px;'>
     <canvas id='tiltChart'></canvas>
   </div>
+
+  <button id="clearGraphBtn" class="btn" style="background:#607d8b;">
+    Clear Graph
+  </button>
 
   <div class="dpad">
     <button id="turn2" class="btn">&#8634;</button><button id="up" class="btn">&#9650;</button><button id="turn1" class="btn">&#8635;</button>
@@ -60,14 +79,14 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
   </form>
   
   <hr style='margin: 20px 0;'>
+
+  <button id="calibrateBtn" class="btn gyro-btn">
+    Calibrate Gyro
+  </button>
   
   <form action='/stop' method='GET'>
     <input type='submit' class='btn stop-btn' value='EMERGENCY STOP'>
   </form>
-
-  <button id="calibrateBtn" class="btn" style="background:#ff9800;">
-    Calibrate Gyro
-  </button>
 
 <script>
   const ctx = document.getElementById('tiltChart').getContext('2d');
@@ -82,8 +101,16 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
   
   setInterval(() => {
     fetch('/data').then(r => r.json()).then(d => {
-      if (!d.active) {
-        return;
+      
+      // Update Status Text
+      const statusEl = document.getElementById('statusText');
+      if (d.active) {
+        statusEl.innerText = 'ARMED';
+        statusEl.className = 'status-armed';
+      } else {
+        statusEl.innerText = 'DISARMED';
+        statusEl.className = 'status-disarmed';
+        return; // Don't draw on graph if disarmed
       }
 
       chart.data.labels.push('');
@@ -100,19 +127,54 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
 
     }).catch(e => console.log('Data fetch failed'));
   }, 200);
+
   function bindBtn(id, cmd) {
-      let el = document.getElementById(id);
-      let press = (e) => { e.preventDefault(); fetch('/control?dir='+cmd); };
-      let release = (e) => { e.preventDefault(); fetch('/control?dir=S'); };
-      el.addEventListener('mousedown', press); el.addEventListener('touchstart', press);
-      el.addEventListener('mouseup', release); el.addEventListener('touchend', release);
-      el.addEventListener('mouseleave', release); 
-    }
-    window.onload = () => {
-      bindBtn('up', 'F'); bindBtn('down', 'B'); bindBtn('left', 'L'); bindBtn('right', 'R'); bindBtn('turn1','T1'); bindBtn('turn2', 'T2');
-      document.getElementById('stop').onclick = (e) => { e.preventDefault(); fetch('/control?dir=S'); };
-      document.getElementById('calibrateBtn').onclick = (e) => { e.preventDefault(); fetch('/calibrate'); };
+    let el = document.getElementById(id);
+    let press = (e) => { e.preventDefault(); fetch('/control?dir=' + cmd); };
+    let release = (e) => { e.preventDefault(); fetch('/control?dir=S'); };
+
+    el.addEventListener('mousedown', press);
+    el.addEventListener('touchstart', press);
+    el.addEventListener('mouseup', release);
+    el.addEventListener('touchend', release);
+    el.addEventListener('mouseleave', release);
+    el.addEventListener('touchcancel', release);
+  }
+
+  window.onload = () => {
+    bindBtn('up', 'F');
+    bindBtn('down', 'B');
+    bindBtn('left', 'L');
+    bindBtn('right', 'R');
+    
+    document.getElementById('turn1').onclick = (e) => {
+      e.preventDefault();
+      fetch('/control?dir=T1');
     };
+
+    document.getElementById('turn2').onclick = (e) => {
+      e.preventDefault();
+      fetch('/control?dir=T2');
+    };
+
+    document.getElementById('stop').onclick = (e) => {
+      e.preventDefault();
+      fetch('/control?dir=S');
+    };
+
+    document.getElementById('calibrateBtn').onclick = (e) => {
+      e.preventDefault();
+      fetch('/calibrate');
+    };
+
+    document.getElementById('clearGraphBtn').onclick = (e) => {
+      e.preventDefault();
+      chart.data.labels = [];
+      chart.data.datasets[0].data = [];
+      chart.data.datasets[1].data = [];
+      chart.update();
+    };
+  };
 </script>
 </body>
 </html>
