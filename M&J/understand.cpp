@@ -8,6 +8,7 @@
 #include <webpage.h>
 
 #include <WiFi.h>
+#include "esp_wpa2.h"
 #include <WebServer.h>
 #include <HTTPClient.h> //Send IP to google sheet
 #include "calibrate.h" //Calibrate the MPU6050
@@ -40,6 +41,7 @@ float GYRO_BIAS_Y = -0.012810;
 float GYRO_BIAS_Z = -0.022884;
 
 const char* ssid = WIFI_SSID;
+const char* username = WIFI_USER;
 const char* password = WIFI_PASS;
 const char* url = SCRIPT_URL; //Send IP to google sheet
 
@@ -205,11 +207,15 @@ void setup() {
 	mpu.setGyroRange(MPU6050_RANGE_250_DEG);
 	mpu.setFilterBandwidth(MPU6050_BAND_44_HZ);
 
-	//Connect to WiFi
-	Serial.print("Connecting to WiFi");
+	//Connect to Imperial-WPA
+	Serial.print("Connecting to WPA2 Enterprise WiFi");
 	WiFi.disconnect(true);
 	WiFi.mode(WIFI_STA);
-	WiFi.begin(ssid, password);
+	esp_wifi_sta_wpa2_ent_set_identity((uint8_t *)WIFI_USER,strlen(WIFI_USER));
+	esp_wifi_sta_wpa2_ent_set_username((uint8_t *)WIFI_USER,strlen(WIFI_USER));
+	esp_wifi_sta_wpa2_ent_set_password((uint8_t *)WIFI_PASS,strlen(WIFI_PASS));
+	esp_wifi_sta_wpa2_ent_enable();
+	WiFi.begin(WIFI_SSID);
 	while (WiFi.status() != WL_CONNECTED) {
 		delay(500);
 		Serial.print(".");
