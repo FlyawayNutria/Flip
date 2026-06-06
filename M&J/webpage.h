@@ -41,6 +41,8 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
     }
     .status-armed { color: #4CAF50; }
     .status-disarmed { color: #f44336; }
+    .status-turning { color: #ff9800; }
+    .status-straight { color: #607d8b; }
   </style>
   <script src='https://cdn.jsdelivr.net/npm/chart.js'></script>
 </head>
@@ -48,7 +50,8 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
   <h2>Balance Bot Tuning</h2>
 
   <div class="status-box">
-    Status: <span id="statusText" class="status-disarmed">DISARMED</span>
+    <div style="margin-bottom: 5px;">Status: <span id="statusText" class="status-disarmed">DISARMED</span></div>
+    <div>Turning: <span id="turningText" class="status-straight">NO</span></div>
   </div>
 
   <div style='width:100%; height:250px; margin-bottom: 20px;'>
@@ -71,8 +74,8 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
     <b>Kd:</b> <input type='number' step='0.01' name='d' value='%KD%'>
     <b>Kv:</b> <input type='number' step='0.01' name='v' value='%KV%'>
     <b>Setpoint:</b> <input type='number' step='0.01' name='t' value='%SP%'>
-    <b>Turning Kp:</b> <input type='number' step='0.01' name='tkp' value='%TKP%'>
-    <b>Turning Kd:</b> <input type='number' step='0.01' name='tkd' value='%TKD%'>
+    <b>Turning Kp:</b> <input type='number' step='0.001' name='tkp' value='%TKP%'>
+    <b>Turning Kd:</b> <input type='number' step='0.001' name='tkd' value='%TKD%'>
     <b>Velocity Kp:</b> <input type='number' step='0.01' name='vp' value='%VKP%'>
     <b>Velocity Ki:</b> <input type='number' step='0.01' name='vi' value='%VKI%'>
     <input type='submit' class='btn update-btn' value='UPDATE PID'>
@@ -111,6 +114,15 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
         statusEl.innerText = 'DISARMED';
         statusEl.className = 'status-disarmed';
         return; // Don't draw on graph if disarmed
+      }
+
+      const turnEl = document.getElementById('turningText');
+      if (d.turning) {
+        turnEl.innerText = 'YES';
+        turnEl.className = 'status-turning';
+      } else {
+        turnEl.innerText = 'NO';
+        turnEl.className = 'status-straight';
       }
 
       chart.data.labels.push('');
