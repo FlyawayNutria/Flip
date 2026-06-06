@@ -73,7 +73,7 @@ float Kv = 5.0;
 float Kp = 24.0;
 float Ki = 0.00;
 float Kd = 0.6;
-float setpoint = 88.0;
+float setpoint = 87.6;
 float tiltx = 0.0;
 float target_accel = 0.0;
 bool robot_active = false;
@@ -145,8 +145,8 @@ String getWebPage() { //Pulls the webpage from webpage.h, and replaces placehold
 	html.replace("%KD%", String(Kd));
 	html.replace("%SP%", String(setpoint));
 	html.replace("%KV%", String(Kv));
-	html.replace("%TKP%", String(K_YAW));
-	html.replace("%TKD%", String(K_DAMP));
+	html.replace("%TKP%", String(K_YAW, 3));
+	html.replace("%TKD%", String(K_DAMP, 3));
 	html.replace("%VKP%", String(vKp));
 	html.replace("%VKI%", String(vKi));
 
@@ -237,6 +237,7 @@ void setup() {
 		json += "\"tilt\":" + String(tiltx, 2);
 		json += ",\"set\":" + String(setpoint, 2);
 		json += ",\"active\":" + String(robot_active ? "true" : "false");
+		json += ",\"turning\":" + String(is_turning ? "true" : "false");
 		json += "}";
 		server.send(200, "application/json", json);
 	});
@@ -253,7 +254,7 @@ void setup() {
 		if (server.hasArg("tkd")) K_DAMP = server.arg("tkd").toFloat();
 
 		error_integral = 0.0;
-		Serial.printf("Web Update | Kp: %.2f | Ki: %.2f | Kd: %.2f | Setpoint: %.2f | Kv: %.2f | TKP: %.2f | TKD: %.2f | VKP: %.2f | VKI: %.2f\n", Kp, Ki, Kd, setpoint, Kv, K_YAW, K_DAMP, vKp, vKi);
+		Serial.printf("Web Update | Kp: %.2f | Ki: %.2f | Kd: %.2f | Setpoint: %.2f | Kv: %.2f | TKP: %.3f | TKD: %.3f | VKP: %.2f | VKI: %.2f\n", Kp, Ki, Kd, setpoint, Kv, K_YAW, K_DAMP, vKp, vKi);
 
 		server.send(200, "text/html", getWebPage());
 	});
@@ -327,14 +328,20 @@ void loop() {
             target_pos = current_pos;
         } else if (braking) {
             target_drive_velocity = 0.0;
-            if (abs(drive_velocity) < brake_threshold) {
+            if (abs(drive_velocity) < brake_threshold) { //Have braked enough
                 braking = false;
                 clearDrive();
-            } else { //Stationary or turning
+            } else { //Stil braking
                 outerLoopActive = true;
-                target_drive_velocity = 0.0;
+                target_pos = current_pos;
             }
-        }
+        } else if (is_turning) {
+			outerLoopActive = false;
+			target_pos = current_pos;
+		} else { //Stationary
+			outerLoopActive = true;
+			target_drive_velocity = 0.0;
+		}
 
         if (outerLoopActive) {
             float velocity_error = target_drive_velocity - drive_velocity;
@@ -368,23 +375,16 @@ void loop() {
 
 		//Track yaw for the 90 degree turn (x is the yaw axis)
 		yawRate = gyroRobot.x * (180.0 / PI);
-		if (abs(yawRate) < 0.5) { //ignore microjitters in turning
-			yawRate = 0.0;
-		}
 		current_heading += yawRate * DT;
 		if (is_turning) {
 			float heading_error = target_heading - current_heading;
 			while (heading_error > 180.0) heading_error -= 360.0;
 			while (heading_error < -180.0) heading_error += 360.0;
-			//steering_offset = -(K_YAW * heading_error) + (K_DAMP * yawRate); //PD controller //Here might have to flip signs
-			if (abs(heading_error) < 2.0) {
-                steering_offset = (K_DAMP * yawRate); //Purely a D controller when close to end of turn
-            } else {
-                steering_offset = -(K_YAW * heading_error) + (K_DAMP * yawRate); //PD controller as per
-            }
+			steering_offset = -(K_YAW * heading_error) - (K_DAMP * yawRate); //PD controller //Here might have to flip signs
             steering_offset = constrain(steering_offset, -TURN_SPEED, TURN_SPEED);
 
-			if (abs(heading_error) < 2.0 && abs(yawRate) < 7.0) { //Stop turning if within 2 degree of target and rotation is slow
+			//if (abs(heading_error) < 2.0 && abs(yawRate) < 7.0) { //Stop turning if within 2 degree of target and rotation is slow
+			if (abs(heading_error) < 2.0) { //Force exit 
 				is_turning = false;
 				steering_offset = 0.0;
 				current_heading = target_heading;
