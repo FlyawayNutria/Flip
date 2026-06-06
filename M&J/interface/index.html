@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Balance Bot Tuning</title>
+  <style>
+    body { font-family: Arial; padding: 20px; max-width: 400px; margin: auto; text-align: center; }
+    input { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
+    .btn {
+      padding: 15px;
+      font-size: 16px;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.1s ease;
+      box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+      margin-bottom: 10px;
+    }
+    .btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 rgba(0,0,0,0.2);
+      filter: brightness(0.8);
+    }
+    .update-btn { background-color: #4CAF50; margin-bottom: 20px; }
+    .stop-btn { background-color: #f44336; }
+    .gyro-btn { background-color: #ff9800; }
+    .dpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 20px 0; }
+    .dpad .btn { margin-bottom: 0; }
+    .status-box {
+      background: #f2f2f2;
+      padding: 10px;
+      border-radius: 5px;
+      margin-bottom: 15px;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    .status-armed { color: #4CAF50; }
+    .status-disarmed { color: #f44336; }
+    .status-turning { color: #ff9800; }
+    .status-straight { color: #607d8b; }
+  </style>
+  <script src='https://cdn.jsdelivr.net/npm/chart.js'></script>
+</head>
+<body>
+  <h2>Balance Bot Tuning</h2>
+
+  <div class="status-box">
+    <div style="margin-bottom: 5px;">Status: <span id="statusText" class="status-disarmed">DISARMED</span></div>
+    <div>Turning: <span id="turningText" class="status-straight">NO</span></div>
+  </div>
+
+  <div style='width:100%; height:250px; margin-bottom: 20px;'>
+    <canvas id='tiltChart'></canvas>
+  </div>
+
+  <button id="clearGraphBtn" class="btn" style="background:#607d8b;">
+    Clear Graph
+  </button>
+
+  <div class="dpad">
+    <button id="turn2" class="btn">&#8634;</button><button id="up" class="btn">&#9650;</button><button id="turn1" class="btn">&#8635;</button>
+    <button id="left" class="btn">&#9664;</button><button id="stop" class="btn" style="background:#666;">&#9632;</button><button id="right" class="btn">&#9654;</button>
+    <div class="empty"></div><button id="down" class="btn">&#9660;</button><div class="empty"></div>
+  </div>
+
+  <form id="pidForm">
+    <b>Kp:</b> <input type='number' step='0.01' id='p' value='%KP%'>
+    <b>Ki:</b> <input type='number' step='0.01' id='i' value='%KI%'>
+    <b>Kd:</b> <input type='number' step='0.01' id='d' value='%KD%'>
+    <b>Setpoint:</b> <input type='number' step='0.01' id='t' value='%SP%'>
+    <b>Turning Kp:</b> <input type='number' step='0.001' id='tkp' value='%TKP%'>
+    <b>Turning Kd:</b> <input type='number' step='0.001' id='tkd' value='%TKD%'>
+    <b>Velocity Kp:</b> <input type='number' step='0.01' id='vp' value='%VKP%'>
+    <b>Velocity Ki:</b> <input type='number' step='0.01' id='vi' value='%VKI%'>
+    <button type="button" class="btn update-btn" onclick="sendPID()">UPDATE PID</button>
+  </form>
+  
+  <hr style='margin: 20px 0;'>
+
+  <button id="calibrateBtn" class="btn gyro-btn">
+    Calibrate Gyro
+  </button>
+  
+  <button class="btn stop-btn" onclick="socket.emit('command', 'S')">EMERGENCY STOP</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+    const socket = io(); // Connects to the Pi server
+    
+    // Add logic to handle connection success
+    socket.on('connect', () => {
+        socket.emit('request_initial_values');
+        console.log('Connected to Pi Server!');
+    });
+
+    // Listen for the values coming from the Pi server
+    socket.on('sync_values', (data) => {
+        document.getElementById('p').value = data.p;
+        document.getElementById('i').value = data.i;
+        document.getElementById('d').value = data.d;
+        document.getElementById('t').value = data.t;
+        document.getElementById('tkp').value = data.tkp;
+        document.getElementById('tkd').value = data.tkd;
+        document.getElementById('vp').value = data.vp;
+        document.getElementById('vi').value = data.vi;
+        console.log("Values synced from ESP32");
+    });
+
+    function sendPID() {
+        const pidData = {
+            p: document.getElementById('p').value,
+            i: document.getElementById('i').value,
+            d: document.getElementById('d').value,
+            t: document.getElementById('t').value,
+            tkp: document.getElementById('tkp').value,
+            tkd: document.getElementById('tkd').value,
+            vp: document.getElementById('vp').value,
+            vi: document.getElementById('vi').value
+        };
+        socket.emit('update_pid', pidData);
+        alert("PID update sent to ESP")
+    }
+
+    function bindBtn(id, cmd) {
+        let el = document.getElementById(id);
+        let press = (e) => { e.preventDefault(); socket.emit('command', cmd); };
+        let release = (e) => { e.preventDefault(); socket.emit('command', 'S'); };
+
+        el.addEventListener('mousedown', press);
+        el.addEventListener('touchstart', press);
+        el.addEventListener('mouseup', release);
+        el.addEventListener('touchend', release);
+        el.addEventListener('mouseleave', release);
+        el.addEventListener('touchcancel', release);
+    }
+
+    window.onload = () => {
+        bindBtn('up', 'F');
+        bindBtn('down', 'B');
+        bindBtn('left', 'L');
+        bindBtn('right', 'R');
+        
+        document.getElementById('turn1').onclick = (e) => { //Single press buttons, not hold buttons
+            e.preventDefault();
+            socket.emit('command', 'T1');
+        };
+
+        document.getElementById('turn2').onclick = (e) => {
+            e.preventDefault();
+            socket.emit('command', 'T2');
+        };
+
+        document.getElementById('stop').onclick = (e) => {
+            e.preventDefault();
+            socket.emit('command', 'S');
+        };
+
+        document.getElementById('calibrateBtn').onclick = (e) => {
+            e.preventDefault();
+            socket.emit('command', 'CAL');
+        };
+    };
+</script>
+</body>
+</html>
