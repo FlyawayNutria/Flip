@@ -1,10 +1,13 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, Response
 from flask_socketio import SocketIO
 import serial
 import threading #To read PID values from serial
 import time
+import cv2
+from picamera2 import Picamera2
 
 app = Flask(__name__)
+picam2 = Picamera2()
 socketio = SocketIO(app)
 
 # Open serial port
@@ -24,9 +27,27 @@ def serial_reader():
             time.sleep(0.01) #10ms
 threading.Thread(target=serial_reader, daemon=True).start()
 
+# Optimize resolution for low latency over Wi-Fi
+picam2.configure(picam2.create_preview_configuration(main={"format": "XRGB8888", "size": (640, 480)}))
+picam2.start()
+
+def generate_frames():
+    while True:
+        frame = picam2.capture_array()
+        # Compress to JPEG to save network bandwidth
+        ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+        if not ret:
+            continue
+        yield (b'--frame\r\n'b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+
 @app.route('/')
 def index():
     return render_template('index.html')
+
+# Video feed for the app
+@app.route('/video_feed')
+def video_feed():
+    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 # Initial handshake with ESP32 to get initial gains
 @socketio.on('request_initial_values')
