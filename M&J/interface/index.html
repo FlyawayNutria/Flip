@@ -51,13 +51,10 @@
     <div>Turning: <span id="turningText" class="status-straight">NO</span></div>
   </div>
 
-  <div style='width:100%; height:250px; margin-bottom: 20px;'>
-    <canvas id='tiltChart'></canvas>
+  <div style="width: 100%; max-width: 360px; margin: 15px auto; border-radius: 8px; overflow: hidden; border: 1px solid #ccc;">
+    <h3 style="margin: 5px 0; font-size: 14px; font-family: Arial;">Live Camera Feed</h3>
+    <img src="{{ url_for('video_feed') }}" style="width: 100%; height: auto; display: block; background: #333;" alt="Camera loading...">
   </div>
-
-  <button id="clearGraphBtn" class="btn" style="background:#607d8b;">
-    Clear Graph
-  </button>
 
   <div class="dpad">
     <button id="turn2" class="btn">&#8634;</button><button id="up" class="btn">&#9650;</button><button id="turn1" class="btn">&#8635;</button>
