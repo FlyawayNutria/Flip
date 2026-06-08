@@ -209,17 +209,18 @@ void loop() {
         else if (input == "T1") { startSpotTurn(90.0); }
         else if (input == "T2") { startSpotTurn(-90.0); }
         else if (input == "CAL") { resetBot(); calibrateGyro(); }
-        else if (input.startsWith("P")) { //This is a PID update
-            Kp = input.substring(input.indexOf('P')+1, input.indexOf(',I')).toFloat();
-            Ki = input.substring(input.indexOf('I')+1, input.indexOf(',D')).toFloat();
-            Kd = input.substring(input.indexOf('D')+1, input.indexOf(',T')).toFloat();
-            setpoint = input.substring(input.indexOf('T')+1, input.indexOf(',TKP')).toFloat();
-            K_YAW = input.substring(input.indexOf('TKP')+3, input.indexOf(',TKD')).toFloat();
-            K_DAMP = input.substring(input.indexOf('TKD')+3, input.indexOf(',VP')).toFloat();
-            vKp = input.substring(input.indexOf('VP')+2, input.indexOf(',VI')).toFloat();
-            vKi = input.substring(input.indexOf('VI')+2).toFloat();
-            error_integral = 0; // Reset integral on PID change
-        }
+        else if (input.startsWith("P")) { // This is a PID update
+			Kp     = input.substring(input.indexOf('P') + 1,   input.indexOf(",I")).toFloat();
+			Ki     = input.substring(input.indexOf(",I") + 2,  input.indexOf(",D")).toFloat();
+			Kd     = input.substring(input.indexOf(",D") + 2,  input.indexOf(",T")).toFloat();
+			setpoint = input.substring(input.indexOf(",T") + 2,  input.indexOf(",TKP")).toFloat();
+			K_YAW  = input.substring(input.indexOf(",TKP") + 4, input.indexOf(",TKD")).toFloat();
+			K_DAMP = input.substring(input.indexOf(",TKD") + 4, input.indexOf(",VP")).toFloat();
+			vKp    = input.substring(input.indexOf(",VP") + 3,  input.indexOf(",VI")).toFloat();
+			vKi    = input.substring(input.indexOf(",VI") + 3).toFloat();
+			
+			error_integral = 0; // Reset integral on PID change
+		}
     }
 	
 	static unsigned long printTimer = 0;
