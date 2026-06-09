@@ -13,33 +13,18 @@
 #include <HTTPClient.h> //Send IP to google sheet
 #include "calibrate.h" //Calibrate the MPU6050
 
-struct Vec3 { //3x1 vector
-	float x;
-	float y;
-	float z;
-};
+struct Vec3 { float x; float y; float z; }; //3x1 vector
 
 //Multiplies a 3x3 matrix by a 3x1 vector
-Vec3 matMul(const float R[3][3], Vec3 v) {
-	Vec3 out;
-	out.x = R[0][0] * v.x + R[0][1] * v.y + R[0][2] * v.z;
-	out.y = R[1][0] * v.x + R[1][1] * v.y + R[1][2] * v.z;
-	out.z = R[2][0] * v.x + R[2][1] * v.y + R[2][2] * v.z;
-	return out;
-}
+Vec3 matMul(const float R[3][3], Vec3 v) { Vec3 out; out.x = R[0][0] * v.x + R[0][1] * v.y + R[0][2] * v.z; out.y = R[1][0] * v.x + R[1][1] * v.y + R[1][2] * v.z; out.z = R[2][0] * v.x + R[2][1] * v.y + R[2][2] * v.z; return out; }
+float R_sensor_to_robot[3][3] = { { 1.0, 0.0, 0.0 }, { 0.0, 1.0, 0.0 }, { 0.0, 0.0, 1.0 } };
 
-float R_sensor_to_robot[3][3] = {
-	{ 1.0, 0.0, 0.0 },
-	{ 0.0, 1.0, 0.0 },
-	{ 0.0, 0.0, 1.0 }
-};
-
-// Manually measured gyro bias, in rad/s.
-// These are subtracted from the raw gyro readings.  
+// Manually measured gyro bias, in rad/s, subtracted from GYRO readings. 
 float GYRO_BIAS_X = -0.029064;
 float GYRO_BIAS_Y = -0.012810;
 float GYRO_BIAS_Z = -0.022884;
 
+//WIFI stuff
 const char* ssid = WIFI_SSID;
 const char* username = WIFI_USER;
 const char* password = WIFI_PASS;
@@ -67,6 +52,7 @@ const int OUTER_LOOP_INTERVAL = 50;
 //Filter constants
 const float C = 0.99;
 const float DT = (float)LOOP_INTERVAL / 1000.0;
+const float oDT = (float)OUTER_LOOP_INTERVAL / 1000.0; //outer loop dt
 
 //Variables for inner loop balancing
 float Kp = 12.0;
@@ -76,8 +62,6 @@ float setpoint = 87.0;
 float tiltx = 0.0;
 float target_accel = 0.0;
 bool robot_active = false;
-
-float error_old = 0.0;
 float error_integral = 0.0;
 float integrated_velocity = 0.0;
 
@@ -102,13 +86,11 @@ float vKi = 0.0;
 float vKd = 0.005;
 float prev_drive_velo = 0.0;
 bool velo_derivative = false;
-float target_pos = 0.0; //rad
-const float oDT = (float)OUTER_LOOP_INTERVAL/1000.0;
-const float MAX_TILT = 5.0; //5 degrees
+float MAX_TILT = 5.0; //5 degrees
 float target_drive_velocity = 0.0;
 float MAX_DRIVE_VELOCITY = 5.0;
 bool driving = false;
-const float brake_threshold = 0.15;
+float Kveer = 0.15;
 
 void uploadIP() { //Send IP to google sheet
 	HTTPClient http;
@@ -127,21 +109,17 @@ WebServer server(80);
 step step1(STEPPER_INTERVAL_US, STEPPER1_STEP_PIN, STEPPER1_DIR_PIN);
 step step2(STEPPER_INTERVAL_US, STEPPER2_STEP_PIN, STEPPER2_DIR_PIN);
 
-float getPos() {
-    return (step1.getPositionRad() - step2.getPositionRad()) / 2.0;
-}
+float getPos() { return (step1.getPositionRad() - step2.getPositionRad()) / 2.0; }
 
 void clearDrive() {
     target_drive_velocity = 0.0;
     driving = false;
-    target_pos = getPos();
 	prev_drive_velo = 0.0;
 	velo_derivative = false;
 }
 
 String getWebPage() { //Pulls the webpage from webpage.h, and replaces placeholders
 	String html = FPSTR(WEBPAGE_HTML);
-
 	html.replace("%KP%", String(Kp));
 	html.replace("%KI%", String(Ki));
 	html.replace("%KD%", String(Kd));
@@ -151,19 +129,17 @@ String getWebPage() { //Pulls the webpage from webpage.h, and replaces placehold
 	html.replace("%VKP%", String(vKp));
 	html.replace("%VKI%", String(vKi));
 	html.replace("%VKD%", String(vKd, 3));
-
+	html.replace("%KT%", String(Kveer));
+	html.replace("%TILT%", String(MAX_TILT));
 	return html;
 }
 
-bool TimerHandler(void * timerNo) {
-	step1.runStepper();
-	step2.runStepper();
-	return true;
-}
+bool TimerHandler(void * timerNo) { step1.runStepper(); step2.runStepper(); return true; }
 
 //Used for closed loop turning
 void startSpotTurn(float deltaDeg) {
 	clearDrive();
+	integrated_velocity = 0.0; //Just added this
 	error_integral = 0.0;
 	steering_offset = 0.0;
 	target_heading = current_heading + deltaDeg;
@@ -173,20 +149,14 @@ void startSpotTurn(float deltaDeg) {
 void resetBot() {
 	robot_active = false;
 	digitalWrite(STEPPER_EN_PIN, HIGH);
-	
-	//Inner loop balancing
-	integrated_velocity = 0.0;
+	integrated_velocity = 0.0; //Inner loop
 	error_integral = 0.0;
-	error_old = 0.0;
 	target_accel = 0.0;
-
-	//Turning and movement
-	steering_offset = 0.0;
+	steering_offset = 0.0; //Turning and movement
 	target_drive_velocity = 0.0;
 	is_turning = false;
 	yawRate = 0.0;
 	clearDrive();
-
 	step1.setTargetSpeedRad(0.0);
 	step2.setTargetSpeedRad(0.0);
 }
@@ -254,9 +224,11 @@ void setup() {
 		if (server.hasArg("vd")) vKd = server.arg("vd").toFloat();
 		if (server.hasArg("tkp")) K_YAW = server.arg("tkp").toFloat();
 		if (server.hasArg("tkd")) K_DAMP = server.arg("tkd").toFloat();
+		if (server.hasArg("kt")) Kveer = server.arg("kt").toFloat();
+		if (server.hasArg("tilt")) MAX_TILT = server.arg("tilt").toFloat();
 
 		error_integral = 0.0;
-		Serial.printf("Web Update | Kp: %.2f | Ki: %.2f | Kd: %.2f | Setpoint: %.2f | TKP: %.3f | TKD: %.3f | VKP: %.2f | VKI: %.2f | VKD: %.2f\n", Kp, Ki, Kd, setpoint, K_YAW, K_DAMP, vKp, vKi, vKd);
+		Serial.printf("Web Update | Kp: %.2f | Ki: %.2f | Kd: %.2f | Setpoint: %.2f | TKP: %.3f | TKD: %.3f | VKP: %.2f | VKI: %.2f | VKD: %.2f | KVeer: %.2f | Max Tilt: %.2f\n", Kp, Ki, Kd, setpoint, K_YAW, K_DAMP, vKp, vKi, vKd, Kveer, MAX_TILT);
 
 		server.send(200, "text/html", getWebPage());
 	});
@@ -271,13 +243,22 @@ void setup() {
 			else if (dir == "R") { clearDrive(); steering_offset = -TURN_SPEED; is_turning = false; }
 			else if (dir == "T1" && !is_turning) { startSpotTurn(90.0); }//target_heading = current_heading - 90.0; is_turning = true; }//Turn 90 degrees CW
 			else if (dir == "T2" && !is_turning) { startSpotTurn(-90.0); }//target_heading = current_heading + 90.0; is_turning = true; } //Turn 90 degrees ACW
-			else {
-                if (driving) {
-                    driving = false;
-                    target_drive_velocity = 0.0;
-                } else { clearDrive();}
-			        if (!is_turning) { steering_offset = 0.0; }
-			} //Do nothing
+			else if (dir == "FL") { //Left and forward
+				target_drive_velocity = MAX_DRIVE_VELOCITY;
+				steering_offset = TURN_SPEED * Kveer;
+				is_turning = false;
+				driving = true;
+			} else if (dir == "FR") { //Right and forward
+				target_drive_velocity = MAX_DRIVE_VELOCITY;
+				steering_offset = -TURN_SPEED * Kveer;
+				is_turning = false;
+				driving = true;
+			} else {
+				clearDrive();
+			    if (!is_turning) {
+					steering_offset = 0.0;
+				}
+			}
 		}
 		server.send(200, "text/plain", "OK");
 	});
@@ -314,7 +295,7 @@ void loop() {
 	static unsigned long printTimer = 0;
 	static unsigned long loopTimer = 0;
 	static unsigned long outerLoopTimer = 0;
-
+	
 	//Outer loop dynamic control - ver2, turning is good
 	if (millis() > outerLoopTimer) {
 		outerLoopTimer += OUTER_LOOP_INTERVAL;
@@ -338,43 +319,6 @@ void loop() {
 			dynamic_tilt = constrain(new_dynamic_tilt, -MAX_TILT, MAX_TILT);
 		}
 	}
-	
-	/*
-	//Outer loop ver1 
-	if (millis() > outerLoopTimer) {
-		outerLoopTimer += OUTER_LOOP_INTERVAL;
-
-		if (is_turning) {
-			dynamic_tilt = 0.0;
-			prev_drive_velo = 0.0;
-			velo_derivative = false;
-			return;
-		}
-
-		float leftSpeed = step1.getSpeedRad();
-		float rightSpeed = step2.getSpeedRad();
-		float drive_velocity = (rightSpeed - leftSpeed) * 0.5;
-
-		if (!driving) {
-			target_drive_velocity = 0.0;
-			prev_drive_velo = drive_velocity;
-			velo_derivative = true;
-			dynamic_tilt = 0.0;
-			return;
-		}
-
-		//Drive mode (F/B is pressed)
-		float velocity_error = target_drive_velocity - drive_velocity;
-		float drive_accel = 0.0;
-		if (velo_derivative) {
-			drive_accel = (drive_velocity - prev_drive_velo) /oDT;
-		} else {
-			velo_derivative = true;
-		}
-		prev_drive_velo = drive_velocity;
-		dynamic_tilt = (vKp * velocity_error) - (vKd * drive_accel);
-		dynamic_tilt = constrain(dynamic_tilt, -MAX_TILT, MAX_TILT);
-	} */
 
 	//Inner loop balancing
 	if (millis() > loopTimer) {
@@ -405,10 +349,10 @@ void loop() {
 			steering_offset = -(K_YAW * heading_error) - (K_DAMP * yawRate); //PD controller //Here might have to flip signs
             steering_offset = constrain(steering_offset, -TURN_SPEED, TURN_SPEED);
 
-			//if (abs(heading_error) < 2.0 && abs(yawRate) < 7.0) { //Stop turning if within 2 degree of target and rotation is slow
-			if (abs(heading_error) < 2.0) { //Force exit 
+			if (abs(heading_error) < 2.0) { //Stop if turn within 2 deg
 				is_turning = false;
 				steering_offset = 0.0;
+				integrated_velocity = 0.0; //Try to stop moving after the turn
 				current_heading = target_heading;
 			}
 		}
@@ -416,9 +360,7 @@ void loop() {
 		float error = (setpoint + dynamic_tilt) - tiltx;
 
 		// Fall safety
-		if (abs(error) > 30.0 && robot_active) {
-			resetBot();
-		}
+		if (abs(error) > 30.0 && robot_active) { resetBot(); }
 
 		// Auto-arm when close to setpoint
 		if (!robot_active) {
@@ -426,7 +368,6 @@ void loop() {
                 resetBot();
                 robot_active = true; //Overwrite these after the reset
                 digitalWrite(STEPPER_EN_PIN, LOW);
-                error_old = error;
                 Serial.println("Bot armed");
 			} else {
                 step1.setTargetSpeedRad(0.0);
@@ -434,7 +375,7 @@ void loop() {
 			}
 		}
 
-		// Balance controller
+		//Inner loop balance controller
 		if (robot_active) {
 			error_integral += error * DT;
 			error_integral = constrain(error_integral, -MAX_INTEGRAL, MAX_INTEGRAL);
@@ -451,8 +392,6 @@ void loop() {
 
 			step1.setTargetSpeedRad(-integrated_velocity - steering_offset);
 			step2.setTargetSpeedRad(integrated_velocity - steering_offset);
-
-			error_old = error;
 		}
 	}
 
@@ -462,8 +401,7 @@ void loop() {
 		server.handleClient();
 	}
 
-	//Debug print
-	if (millis() > printTimer) {
+	if (millis() > printTimer) { //Debug print
 		printTimer += PRINT_INTERVAL;
 		//Print something to serial
 	}
