@@ -65,19 +65,21 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
   <div class="dpad">
     <button id="turn2" class="btn">&#8634;</button><button id="up" class="btn">&#9650;</button><button id="turn1" class="btn">&#8635;</button>
     <button id="left" class="btn">&#9664;</button><button id="stop" class="btn" style="background:#666;">&#9632;</button><button id="right" class="btn">&#9654;</button>
-    <div class="empty"></div><button id="down" class="btn">&#9660;</button><div class="empty"></div>
+    <button id="fwleft" class="btn">FL</button><button id="down" class="btn">&#9660;</button><button id="fwright" class="btn">FR</button>
   </div>
 
   <form action='/update' method='GET'>
     <b>Kp:</b> <input type='number' step='0.01' name='p' value='%KP%'>
     <b>Ki:</b> <input type='number' step='0.01' name='i' value='%KI%'>
     <b>Kd:</b> <input type='number' step='0.01' name='d' value='%KD%'>
-    <b>Kv:</b> <input type='number' step='0.01' name='v' value='%KV%'>
     <b>Setpoint:</b> <input type='number' step='0.01' name='t' value='%SP%'>
     <b>Turning Kp:</b> <input type='number' step='0.001' name='tkp' value='%TKP%'>
     <b>Turning Kd:</b> <input type='number' step='0.001' name='tkd' value='%TKD%'>
     <b>Velocity Kp:</b> <input type='number' step='0.01' name='vp' value='%VKP%'>
     <b>Velocity Ki:</b> <input type='number' step='0.01' name='vi' value='%VKI%'>
+    <b>Velocity Kd:</b> <input type='number' step='0.001' name='vd' value='%VKD%'>
+    <b>KVeer:</b> <input type='number' step='0.01' name='kt' value='%KT%'>
+    <b>Max Tilt:</b> <input type='number' step='0.01' name='tilt' value='%TILT%'>
     <input type='submit' class='btn update-btn' value='UPDATE PID'>
   </form>
   
@@ -142,15 +144,24 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
 
   function bindBtn(id, cmd) {
     let el = document.getElementById(id);
-    let press = (e) => { e.preventDefault(); fetch('/control?dir=' + cmd); };
-    let release = (e) => { e.preventDefault(); fetch('/control?dir=S'); };
+    let pressed = false;
+    
+    // Use pointer events to handle mouse and touch simultaneously
+    const press = (e) => {
+      e.preventDefault();
+      pressed = true;
+      fetch('/control?dir=' + cmd);
+    };
+    const release = (e) => {
+      e.preventDefault();
+      if (!pressed) return;
+      pressed = false;
+      fetch('/control?dir=S');
+    };
 
-    el.addEventListener('mousedown', press);
-    el.addEventListener('touchstart', press);
-    el.addEventListener('mouseup', release);
-    el.addEventListener('touchend', release);
-    el.addEventListener('mouseleave', release);
-    el.addEventListener('touchcancel', release);
+    el.addEventListener('pointerdown', press);
+    el.addEventListener('pointerup', release);
+    el.addEventListener('pointerleave', release); // Covers dragging off the button
   }
 
   window.onload = () => {
@@ -158,6 +169,8 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
     bindBtn('down', 'B');
     bindBtn('left', 'L');
     bindBtn('right', 'R');
+    bindBtn('fwleft', 'FL');
+    bindBtn('fwright','FR');
     
     document.getElementById('turn1').onclick = (e) => {
       e.preventDefault();
