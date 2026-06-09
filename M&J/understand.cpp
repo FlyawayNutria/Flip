@@ -69,7 +69,6 @@ const float C = 0.99;
 const float DT = (float)LOOP_INTERVAL / 1000.0;
 
 //Variables for inner loop balancing
-float Kv = 5.0;
 float Kp = 24.0;
 float Ki = 0.00;
 float Kd = 0.6;
@@ -100,6 +99,9 @@ float yawRate = 0.0;
 float dynamic_tilt = 0.0;
 float vKp = 0.2;
 float vKi = 0.0;
+float vKd = 0.0;
+float prev_drive_velo = 0.0;
+bool velo_derivative = false;
 float target_pos = 0.0; //rad
 const float oDT = (float)OUTER_LOOP_INTERVAL/1000.0;
 const float MAX_TILT = 5.0; //5 degrees
@@ -135,6 +137,8 @@ void clearDrive() {
     driving = false;
     braking = false;
     target_pos = getPos();
+	prev_drive_velo = 0.0;
+	velo_derivative = false;
 }
 
 String getWebPage() { //Pulls the webpage from webpage.h, and replaces placeholders
@@ -144,11 +148,11 @@ String getWebPage() { //Pulls the webpage from webpage.h, and replaces placehold
 	html.replace("%KI%", String(Ki));
 	html.replace("%KD%", String(Kd));
 	html.replace("%SP%", String(setpoint));
-	html.replace("%KV%", String(Kv));
 	html.replace("%TKP%", String(K_YAW, 3));
 	html.replace("%TKD%", String(K_DAMP, 3));
 	html.replace("%VKP%", String(vKp));
 	html.replace("%VKI%", String(vKi));
+	html.replace("%VKD%", String(vKd, 3));
 
 	return html;
 }
@@ -247,14 +251,14 @@ void setup() {
 		if (server.hasArg("i")) Ki = server.arg("i").toFloat();
 		if (server.hasArg("d")) Kd = server.arg("d").toFloat();
 		if (server.hasArg("t")) setpoint = server.arg("t").toFloat();
-		if (server.hasArg("v")) Kv = server.arg("v").toFloat();
 		if (server.hasArg("vp")) vKp = server.arg("vp").toFloat();
 		if (server.hasArg("vi")) vKi = server.arg("vi").toFloat();
+		if (server.hasArg("vd")) vKd = server.arg("vd").toFloat();
 		if (server.hasArg("tkp")) K_YAW = server.arg("tkp").toFloat();
 		if (server.hasArg("tkd")) K_DAMP = server.arg("tkd").toFloat();
 
 		error_integral = 0.0;
-		Serial.printf("Web Update | Kp: %.2f | Ki: %.2f | Kd: %.2f | Setpoint: %.2f | Kv: %.2f | TKP: %.3f | TKD: %.3f | VKP: %.2f | VKI: %.2f\n", Kp, Ki, Kd, setpoint, Kv, K_YAW, K_DAMP, vKp, vKi);
+		Serial.printf("Web Update | Kp: %.2f | Ki: %.2f | Kd: %.2f | Setpoint: %.2f | TKP: %.3f | TKD: %.3f | VKP: %.2f | VKI: %.2f | VKD: %.2f\n", Kp, Ki, Kd, setpoint, K_YAW, K_DAMP, vKp, vKi, vKd);
 
 		server.send(200, "text/html", getWebPage());
 	});
@@ -318,40 +322,52 @@ void loop() {
 	if (millis() > outerLoopTimer) {
 		outerLoopTimer += OUTER_LOOP_INTERVAL;
 
-        float leftSpeed = step1.getSpeedRad();
-        float rightSpeed = step2.getSpeedRad();
-        float drive_velocity = (leftSpeed - rightSpeed) * 0.5;
-        float current_pos = getPos();
-        bool outerLoopActive = false;
-        if (driving) {
-            outerLoopActive = true;
-            target_pos = current_pos;
-        } else if (braking) {
-            target_drive_velocity = 0.0;
-            if (abs(drive_velocity) < brake_threshold) { //Have braked enough
-                braking = false;
-                clearDrive();
-            } else { //Stil braking
-                outerLoopActive = true;
-                target_pos = current_pos;
-            }
-        } else if (is_turning) {
-			outerLoopActive = false;
-			target_pos = current_pos;
-		} else { //Stationary
-			outerLoopActive = true;
-			target_drive_velocity = 0.0;
-		}
+		if (is_turning) {
+			dynamic_tilt = 0.0;
+			prev_drive_velo = 0.0;
+			velo_derivative = false;
+		} else {
+			float leftSpeed = step1.getSpeedRad();
+			float rightSpeed = step2.getSpeedRad();
+			float drive_velocity = (rightSpeed - leftSpeed) * 0.5;
+			float current_pos = getPos();
+			bool outerLoopActive = false;
+			if (driving) {
+				outerLoopActive = true;
+				target_pos = current_pos;
+			} else if (braking) {
+				target_drive_velocity = 0.0;
+				if (abs(drive_velocity) < brake_threshold) { //Have braked enough
+					braking = false;
+					clearDrive();
+				} else { //Stil braking
+					outerLoopActive = true;
+					target_pos = current_pos;
+				}
+			} else { //Stationary
+				outerLoopActive = true;
+				target_drive_velocity = 0.0;
+			}
 
-        if (outerLoopActive) {
-            float velocity_error = target_drive_velocity - drive_velocity;
-            float position_error = target_pos - current_pos;
-            position_error = constrain(position_error, -MAX_INTEGRAL, MAX_INTEGRAL);
-            dynamic_tilt = (vKp * velocity_error) + (vKi * position_error);
-            dynamic_tilt = constrain(dynamic_tilt, -MAX_TILT, MAX_TILT);
-        } else {
-            dynamic_tilt = 0.0;
-        }
+			if (outerLoopActive) {
+				float velocity_error = target_drive_velocity - drive_velocity;
+				float position_error = target_pos - current_pos;
+				position_error = constrain(position_error, -MAX_INTEGRAL, MAX_INTEGRAL);
+				float drive_accel = 0.0;
+				if (velo_derivative) {
+					drive_accel = (drive_velocity - prev_drive_velo) /oDT;
+				} else {
+					velo_derivative = true;
+				}
+				prev_drive_velo = drive_velocity;
+				dynamic_tilt = (vKp * velocity_error) + (vKi * position_error) - (vKd * drive_accel);
+				dynamic_tilt = constrain(dynamic_tilt, -MAX_TILT, MAX_TILT);
+			} else {
+				dynamic_tilt = 0.0;
+				prev_drive_velo = 0.0;
+				velo_derivative = false;
+			}
+		}
 	}
 
 	//Inner loop balancing
@@ -375,7 +391,7 @@ void loop() {
 
 		//Track yaw for the 90 degree turn (x is the yaw axis)
 		yawRate = gyroRobot.x * (180.0 / PI);
-		current_heading += yawRate * DT;
+		current_heading -= yawRate * DT;
 		if (is_turning) {
 			float heading_error = target_heading - current_heading;
 			while (heading_error > 180.0) heading_error -= 360.0;
@@ -401,14 +417,14 @@ void loop() {
 		// Auto-arm when close to setpoint
 		if (!robot_active) {
 			if (abs(error) < 0.5) {
-			resetBot();
-			robot_active = true; //Overwrite these after the reset
-			digitalWrite(STEPPER_EN_PIN, LOW);
-			error_old = error;
-			Serial.println("Bot armed");
+                resetBot();
+                robot_active = true; //Overwrite these after the reset
+                digitalWrite(STEPPER_EN_PIN, LOW);
+                error_old = error;
+                Serial.println("Bot armed");
 			} else {
-			step1.setTargetSpeedRad(0.0);
-			step2.setTargetSpeedRad(0.0);
+                step1.setTargetSpeedRad(0.0);
+                step2.setTargetSpeedRad(0.0);
 			}
 		}
 
@@ -418,11 +434,10 @@ void loop() {
 			error_integral = constrain(error_integral, -MAX_INTEGRAL, MAX_INTEGRAL);
 
 			// Since error = setpoint - tiltx
-			float error_derivative = -gyro_tilt;
+			float error_derivative = -gyro_tilt; //might be a sign error?
 
-			// PID gives acceleration, Kv damps the integrated velocity
-			target_accel = Kp * error + Ki * error_integral + Kd * error_derivative - Kv * integrated_velocity;
-
+			// PID gives acceleration
+			target_accel = Kp * error + Ki * error_integral + Kd * error_derivative;
 			target_accel = constrain(target_accel, -MAX_ACCEL, MAX_ACCEL);
 
 			integrated_velocity += target_accel * DT;
@@ -435,7 +450,11 @@ void loop() {
 		}
 	}
 
-	server.handleClient();
+	static unsigned long serverTimer = 0;
+	if (millis() - serverTimer >= 20) {
+		serverTimer = millis();
+		server.handleClient();
+	}
 
 	//Debug print
 	if (millis() > printTimer) {
