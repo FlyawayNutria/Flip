@@ -71,7 +71,7 @@ const float DT = (float)LOOP_INTERVAL / 1000.0;
 //Variables for inner loop balancing
 float Kp = 12.0;
 float Ki = 0.00;
-float Kd = 0.6;
+float Kd = 2;
 float setpoint = 87.0;
 float tiltx = 0.0;
 float target_accel = 0.0;
@@ -99,7 +99,7 @@ float yawRate = 0.0;
 float dynamic_tilt = 0.0;
 float vKp = 0.2;
 float vKi = 0.0;
-float vKd = 0.0;
+float vKd = 0.005;
 float prev_drive_velo = 0.0;
 bool velo_derivative = false;
 float target_pos = 0.0; //rad
@@ -315,7 +315,32 @@ void loop() {
 	static unsigned long loopTimer = 0;
 	static unsigned long outerLoopTimer = 0;
 
-	//Outer loop dynamic control
+	//Outer loop dynamic control - ver2, turning is good
+	if (millis() > outerLoopTimer) {
+		outerLoopTimer += OUTER_LOOP_INTERVAL;
+
+		float leftSpeed = step1.getSpeedRad();
+		float rightSpeed = step2.getSpeedRad();
+		float drive_velocity = (rightSpeed - leftSpeed) * 0.5;
+
+		float drive_accel = 0.0;
+		if (!is_turning && velo_derivative) {
+			drive_accel = (drive_velocity - prev_drive_velo) / oDT;
+		}
+		velo_derivative = !is_turning;
+		prev_drive_velo = drive_velocity;
+
+		if (is_turning || !driving) {
+			dynamic_tilt = 0.0;
+		} else {
+			float velocity_error = target_drive_velocity - drive_velocity;
+			float new_dynamic_tilt = (vKp * velocity_error) - (vKd * drive_accel);
+			dynamic_tilt = constrain(new_dynamic_tilt, -MAX_TILT, MAX_TILT);
+		}
+	}
+	
+	/*
+	//Outer loop ver1 
 	if (millis() > outerLoopTimer) {
 		outerLoopTimer += OUTER_LOOP_INTERVAL;
 
@@ -349,7 +374,7 @@ void loop() {
 		prev_drive_velo = drive_velocity;
 		dynamic_tilt = (vKp * velocity_error) - (vKd * drive_accel);
 		dynamic_tilt = constrain(dynamic_tilt, -MAX_TILT, MAX_TILT);
-	}
+	} */
 
 	//Inner loop balancing
 	if (millis() > loopTimer) {
@@ -440,12 +465,6 @@ void loop() {
 	//Debug print
 	if (millis() > printTimer) {
 		printTimer += PRINT_INTERVAL;
-		Serial.printf(
-			"iv=%.2f vel=%.2f dyn=%.2f\n",
-			integrated_velocity,
-			(step2.getSpeedRad()-step1.getSpeedRad())*0.5,
-			dynamic_tilt
-		);
 		//Print something to serial
 	}
 }
