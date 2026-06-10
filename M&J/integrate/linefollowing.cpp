@@ -26,7 +26,7 @@ float GYRO_BIAS_Z = -0.022884;
 
 //WIFI stuff
 const char* ssid = WIFI_SSID;
-const char* username = WIFI_USER;
+//const char* username = WIFI_USER;
 const char* password = WIFI_PASS;
 const char* url = SCRIPT_URL; //Send IP to google sheet
 
@@ -56,7 +56,7 @@ const float oDT = (float)OUTER_LOOP_INTERVAL / 1000.0; //outerloop dt
 
 //Variables for inner loop balancing
 float Kp = 12.0;
-float Ki = 0.00;
+const float Ki = 0.00;
 float Kd = 2;
 float setpoint = 87.0;
 float tiltx = 0.0;
@@ -83,14 +83,12 @@ float yawRate = 0.0;
 float dynamic_tilt = 0.0;
 float vKp = 0.2;
 float vKi = 0.0;
-float vKd = 0.005;
-float prev_drive_velo = 0.0;
-bool velo_derivative = false;
 float MAX_TILT = 5.0; //5 degrees
 float target_drive_velocity = 0.0;
 float MAX_DRIVE_VELOCITY = 5.0;
 bool driving = false;
 float Kveer = 0.15;
+float velo_integral = 0.0;
 
 enum botMode {
 	MANUAL,
@@ -105,53 +103,111 @@ const int SENSOR_PINS[NUM_SENSORS] = {32, 33, 34};
 int rawLeft = 0;
 int rawCenter = 0;  
 int rawRight  = 0;  
-const float LINE_F_SPEED = 2.0; //Line forward speed
-const float LINE_T_SPEED = 1.5; //Line turn speed
+float LINE_F_SPEED = 1.0; //Line forward speed
+float LINE_T_SPEED = 0.45; //Line turn speed
 const int TAPE_THRESHOLD         = 2000;  // Stricter general tape detection edge
 const int CENTER_LOCK_THRESHOLD  = 1500;  // Deep center requirement to stop rotating
 
+enum LineState {
+    LF_FORWARD,
+    LF_ALIGN_LEFT,
+    LF_ALIGN_RIGHT,
+    LF_RECOVERY
+};
+
+LineState lfState = LF_FORWARD;
+
+unsigned long lf_timer = 0;
+const int LF_SETTLE_MS = 60;
+
 void updateLineFollowing() {
-    // Read sensors
+
     rawLeft   = analogRead(SENSOR_PINS[0]);
     rawCenter = analogRead(SENSOR_PINS[1]);
     rawRight  = analogRead(SENSOR_PINS[2]);
 
-    static String lineState = "FORWARD";
-    static String lastSearchDirection = "RIGHT";
+    switch (lfState) {
 
-    // 1. Determine Intent based on IR array
-    if (rawCenter < CENTER_LOCK_THRESHOLD) {
-        lineState = "FORWARD";
-    } 
-    else if (rawLeft < TAPE_THRESHOLD && rawRight >= TAPE_THRESHOLD) {
-        lineState = "LEFT";
-        lastSearchDirection = "LEFT";
-    } 
-    else if (rawRight < TAPE_THRESHOLD && rawLeft >= TAPE_THRESHOLD) {
-        lineState = "RIGHT";
-        lastSearchDirection = "RIGHT";
-    } 
-    else {
-        // Lost the line, fallback to searching
-        lineState = lastSearchDirection;
+        //Forward
+        case LF_FORWARD: {
+
+            target_drive_velocity = LINE_F_SPEED;
+            steering_offset = 0.0;
+            driving = true;
+
+            // If line is still centered → keep going straight
+            if (rawCenter < CENTER_LOCK_THRESHOLD) {
+                break;
+            }
+
+            // LOST CENTER → decide direction
+            if (rawLeft < TAPE_THRESHOLD && rawRight >= TAPE_THRESHOLD) {
+                lfState = LF_ALIGN_LEFT;
+                lf_timer = millis();
+            }
+            else if (rawRight < TAPE_THRESHOLD && rawLeft >= TAPE_THRESHOLD) {
+                lfState = LF_ALIGN_RIGHT;
+                lf_timer = millis();
+            }
+            else {
+                lfState = LF_RECOVERY;
+            }
+
+            break;
+        }
+
+        //Search left
+        case LF_ALIGN_LEFT: {
+
+            target_drive_velocity = 0.3;        // slow crawl
+            steering_offset = +LINE_T_SPEED;     // turn left
+            driving = true;
+
+            // wait a bit for robot to respond physically
+            if (millis() - lf_timer < LF_SETTLE_MS) break;
+
+            if (rawCenter < CENTER_LOCK_THRESHOLD) {
+                lfState = LF_FORWARD;
+            }
+
+            break;
+        }
+
+        //Search right
+        case LF_ALIGN_RIGHT: {
+
+            target_drive_velocity = 0.3;
+            steering_offset = -LINE_T_SPEED;
+            driving = true;
+
+            if (millis() - lf_timer < LF_SETTLE_MS) break;
+
+            if (rawCenter < CENTER_LOCK_THRESHOLD) {
+                lfState = LF_FORWARD;
+            }
+
+            break;
+        }
+
+        //Recovery mode
+        case LF_RECOVERY: {
+
+            target_drive_velocity = 0.0;
+            steering_offset = 0.0;
+
+            // choose direction to search
+            if (rawLeft < rawRight) {
+                lfState = LF_ALIGN_LEFT;
+            } else {
+                lfState = LF_ALIGN_RIGHT;
+            }
+
+            lf_timer = millis();
+            break;
+        }
     }
 
-	driving = true;
-	is_turning = false;
-    // 2. Translate intent to Balance Bot physical commands
-    if (lineState == "FORWARD") {
-        target_drive_velocity = LINE_F_SPEED;
-        steering_offset = 0.0;
-    } 
-    else if (lineState == "LEFT") {
-        // To turn left safely while balancing, keep a tiny forward velocity or pivot slowly
-        target_drive_velocity = LINE_F_SPEED * 0.3; // slow crawl forward
-        steering_offset = LINE_T_SPEED;                // steer left
-    } 
-    else if (lineState == "RIGHT") {
-        target_drive_velocity = LINE_F_SPEED * 0.3; 
-        steering_offset = -LINE_T_SPEED;               // steer right
-    }
+    is_turning = false; // IMPORTANT: line follower must NOT use yaw controller
 }
 
 void uploadIP() { //Send IP to google sheet
@@ -176,23 +232,23 @@ float getPos() { return (step1.getPositionRad() - step2.getPositionRad()) / 2.0;
 void clearDrive() {
     target_drive_velocity = 0.0;
     driving = false;
-	prev_drive_velo = 0.0;
-	velo_derivative = false;
+	//idk about this one but
+	integrated_velocity = 0.0;
 }
 
 String getWebPage() { //Pulls the webpage from webpage.h, and replaces placeholders
 	String html = FPSTR(WEBPAGE_HTML);
 	html.replace("%KP%", String(Kp));
-	html.replace("%KI%", String(Ki));
 	html.replace("%KD%", String(Kd));
 	html.replace("%SP%", String(setpoint));
 	html.replace("%TKP%", String(K_YAW, 3));
 	html.replace("%TKD%", String(K_DAMP, 3));
 	html.replace("%VKP%", String(vKp));
-	html.replace("%VKI%", String(vKi));
-	html.replace("%VKD%", String(vKd, 3));
+	html.replace("%VKI%", String(vKi, 3));
 	html.replace("%KT%", String(Kveer));
 	html.replace("%TILT%", String(MAX_TILT));
+	html.replace("%LFF%", String(LINE_F_SPEED));
+	html.replace("%LFT%", String(LINE_T_SPEED));
 	return html;
 }
 
@@ -204,6 +260,7 @@ void startSpotTurn(float deltaDeg) {
 	integrated_velocity = 0.0; //Just added this
 	error_integral = 0.0;
 	steering_offset = 0.0;
+	velo_integral = 0.0;
 	target_heading = current_heading + deltaDeg;
 	is_turning = true;
 }
@@ -216,9 +273,10 @@ void resetBot() {
 	target_accel = 0.0;
 	steering_offset = 0.0; //Turning and movement
 	target_drive_velocity = 0.0;
+	velo_integral = 0.0;
+	dynamic_tilt = 0.0;
 	is_turning = false;
 	yawRate = 0.0;
-	clearDrive();
 	step1.setTargetSpeedRad(0.0);
 	step2.setTargetSpeedRad(0.0);
 }
@@ -244,6 +302,7 @@ void setup() {
 	mpu.setGyroRange(MPU6050_RANGE_250_DEG);
 	mpu.setFilterBandwidth(MPU6050_BAND_44_HZ);
 
+	/*
 	//Connect to Imperial-WPA
 	Serial.print("Connecting to WPA2 Enterprise WiFi");
 	WiFi.disconnect(true);
@@ -261,6 +320,23 @@ void setup() {
 	Serial.print("IP Address: http://");
 	Serial.println(WiFi.localIP());
 	uploadIP();
+	*/
+
+	//Connect to WiFi
+	Serial.print("Connecting to WiFi");
+	WiFi.disconnect(true);
+	WiFi.mode(WIFI_STA);
+	WiFi.setSleep(false);
+	WiFi.begin(ssid, password);
+	while (WiFi.status() != WL_CONNECTED) {
+		delay(500);
+		Serial.print(".");
+	}
+	Serial.println("\n--- WIFI CONNECTED ---");
+	Serial.print("IP Address: http://");
+	Serial.println(WiFi.localIP());
+	uploadIP();
+
 
 	//Initialise IR array for line following
 	analogReadResolution(12);
@@ -286,19 +362,19 @@ void setup() {
 
 	server.on("/update", []() {
 		if (server.hasArg("p")) Kp = server.arg("p").toFloat();
-		if (server.hasArg("i")) Ki = server.arg("i").toFloat();
 		if (server.hasArg("d")) Kd = server.arg("d").toFloat();
 		if (server.hasArg("t")) setpoint = server.arg("t").toFloat();
 		if (server.hasArg("vp")) vKp = server.arg("vp").toFloat();
 		if (server.hasArg("vi")) vKi = server.arg("vi").toFloat();
-		if (server.hasArg("vd")) vKd = server.arg("vd").toFloat();
 		if (server.hasArg("tkp")) K_YAW = server.arg("tkp").toFloat();
 		if (server.hasArg("tkd")) K_DAMP = server.arg("tkd").toFloat();
 		if (server.hasArg("kt")) Kveer = server.arg("kt").toFloat();
 		if (server.hasArg("tilt")) MAX_TILT = server.arg("tilt").toFloat();
+		if (server.hasArg("lff")) LINE_F_SPEED = server.arg("lff").toFloat();
+		if (server.hasArg("lft")) LINE_T_SPEED = server.arg("lft").toFloat();
 
 		error_integral = 0.0;
-		Serial.printf("Web Update | Kp: %.2f | Ki: %.2f | Kd: %.2f | Setpoint: %.2f | TKP: %.3f | TKD: %.3f | VKP: %.2f | VKI: %.2f | VKD: %.2f | KVeer: %.2f | Max Tilt: %.2f\n", Kp, Ki, Kd, setpoint, K_YAW, K_DAMP, vKp, vKi, vKd, Kveer, MAX_TILT);
+		Serial.printf("Web Update | Kp: %.2f | Kd: %.2f | Setpoint: %.2f | TKP: %.3f | TKD: %.3f | VKP: %.2f | VKI: %.3f | KVeer: %.2f | Max Tilt: %.2f\n", Kp, Kd, setpoint, K_YAW, K_DAMP, vKp, vKi, Kveer, MAX_TILT, LINE_F_SPEED, LINE_T_SPEED);
 
 		server.send(200, "text/html", getWebPage());
 	});
@@ -315,20 +391,15 @@ void setup() {
 			else if (dir == "B") { target_drive_velocity = -MAX_DRIVE_VELOCITY; steering_offset = 0.0; is_turning = false; driving = true; }
 			else if (dir == "L") { clearDrive(); steering_offset = TURN_SPEED; is_turning = false; }
 			else if (dir == "R") { clearDrive(); steering_offset = -TURN_SPEED; is_turning = false; }
-			else if (dir == "T1" && !is_turning) { startSpotTurn(90.0); }//target_heading = current_heading - 90.0; is_turning = true; }//Turn 90 degrees CW
-			else if (dir == "T2" && !is_turning) { startSpotTurn(-90.0); }//target_heading = current_heading + 90.0; is_turning = true; } //Turn 90 degrees ACW
-			else if (dir == "FL") { //Left and forward
-				target_drive_velocity = MAX_DRIVE_VELOCITY;
-				steering_offset = TURN_SPEED * Kveer;
-				is_turning = false;
-				driving = true;
-			} else if (dir == "FR") { //Right and forward
-				target_drive_velocity = MAX_DRIVE_VELOCITY;
-				steering_offset = -TURN_SPEED * Kveer;
-				is_turning = false;
-				driving = true;
-			} else {
-				clearDrive();
+			else if (dir == "T1" && !is_turning) { startSpotTurn(90.0); }
+			else if (dir == "T2" && !is_turning) { startSpotTurn(-90.0); }
+			else if (dir == "FL") { target_drive_velocity = MAX_DRIVE_VELOCITY; steering_offset = TURN_SPEED * Kveer; is_turning = false; driving = true; }
+			else if (dir == "FR") { target_drive_velocity = MAX_DRIVE_VELOCITY; steering_offset = -TURN_SPEED * Kveer; is_turning = false; driving = true; }
+			else {
+				target_drive_velocity = 0.0;
+				driving = false;
+				integrated_velocity = 0.0;
+				velo_integral = 0.0;
 			    if (!is_turning) {
 					steering_offset = 0.0;
 				}
@@ -356,6 +427,7 @@ void setup() {
 			clearDrive(); //Stop previous movement
 			steering_offset = 0.0;
 			integrated_velocity = 0.0;
+			velo_integral = 0.0;
 			if (modeStr == "MANUAL") {
 				current = MANUAL;
 				Serial.println("Mode -> MANUAL");
@@ -393,10 +465,10 @@ void loop() {
 		outerLoopTimer += OUTER_LOOP_INTERVAL;
 
 		if (robot_active) {
-			switch (current) {
-				case MANUAL:
+			switch (current) { //Check what state we are in. 
+				case MANUAL: //Takes commands from the user
 					break;
-				case LINE_FOLLOW:
+				case LINE_FOLLOW: //The IR sensors give the commands
 					updateLineFollowing();
 					break;
 			}
@@ -404,21 +476,17 @@ void loop() {
 
 		float leftSpeed = step1.getSpeedRad();
 		float rightSpeed = step2.getSpeedRad();
-		float drive_velocity = (rightSpeed - leftSpeed) * 0.5;
+		float drive_velocity = (leftSpeed - rightSpeed) * 0.5; //Try left-right
 
-		float drive_accel = 0.0;
-		if (!is_turning && velo_derivative) {
-			drive_accel = (drive_velocity - prev_drive_velo) / oDT;
-		}
-		velo_derivative = !is_turning;
-		prev_drive_velo = drive_velocity;
-
-		if (is_turning || !driving) {
+		if (is_turning) {
 			dynamic_tilt = 0.0;
+			velo_integral = 0.0;
 		} else {
 			float velocity_error = target_drive_velocity - drive_velocity;
-			float new_dynamic_tilt = (vKp * velocity_error) - (vKd * drive_accel);
-			dynamic_tilt = constrain(new_dynamic_tilt, -MAX_TILT, MAX_TILT);
+			velo_integral += velocity_error * oDT;
+			velo_integral = constrain(velo_integral, -MAX_INTEGRAL, MAX_INTEGRAL);
+			dynamic_tilt = (vKp * velocity_error) + (vKi * velo_integral);
+			dynamic_tilt = constrain(dynamic_tilt, -MAX_TILT, MAX_TILT);
 		}
 	}
 
@@ -503,8 +571,8 @@ void loop() {
 		server.handleClient();
 	}
 
-	if (millis() > printTimer) { //Debug print
+	if (millis() > printTimer) {
 		printTimer += PRINT_INTERVAL;
-		//Print something to serial
+		//Serial.println((step1.getSpeedRad() - step2.getSpeedRad()) * 0.5);
 	}
 }
