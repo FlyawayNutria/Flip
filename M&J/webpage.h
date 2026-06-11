@@ -26,6 +26,27 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
       filter: brightness(0.8);
     }
 
+    .mode-btn {
+      background-color: #e7e7e7; 
+      color: black; 
+      border: 2px solid #bbb;
+      padding: 10px 20px;
+      text-align: center;
+      font-size: 16px;
+      margin: 4px 2px;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: 0.3s;
+  }
+
+  /* Visually highlight the active state */
+  .mode-btn.active {
+      background-color: #4CAF50; /* Green highlight */
+      color: white;
+      border-color: #45a049;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  }
+
     .update-btn { background-color: #4CAF50; margin-bottom: 20px; }
     .stop-btn { background-color: #f44336; }
     .gyro-btn { background-color: #ff9800; }
@@ -43,6 +64,10 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
     .status-disarmed { color: #f44336; }
     .status-turning { color: #ff9800; }
     .status-straight { color: #607d8b; }
+    .mode-unknown { color: #607d8b; }
+    .mode-manual { color: #4CAF50; }
+    .mode-line { color: #ff9800; }
+
   </style>
   <script src='https://cdn.jsdelivr.net/npm/chart.js'></script>
 </head>
@@ -52,6 +77,7 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
   <div class="status-box">
     <div style="margin-bottom: 5px;">Status: <span id="statusText" class="status-disarmed">DISARMED</span></div>
     <div>Turning: <span id="turningText" class="status-straight">NO</span></div>
+    <div>Mode: <span id="modeText" class="mode-unknown">Default</span></div>
   </div>
 
   <div style='width:100%; height:250px; margin-bottom: 20px;'>
@@ -68,18 +94,24 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
     <button id="fwleft" class="btn">FL</button><button id="down" class="btn">&#9660;</button><button id="fwright" class="btn">FR</button>
   </div>
 
+  <div class="mode-container" style="text-align: center; margin: 20px 0;">
+    <h3>Bot Mode</h3>
+    <button id="btn-manual" class="mode-btn" onclick="changeMode('MANUAL')">Manual Control</button>
+    <button id="btn-line" class="mode-btn" onclick="changeMode('LINE')">Line Follower</button>
+  </div>
+
   <form action='/update' method='GET'>
     <b>Kp:</b> <input type='number' step='0.01' name='p' value='%KP%'>
-    <b>Ki:</b> <input type='number' step='0.01' name='i' value='%KI%'>
     <b>Kd:</b> <input type='number' step='0.01' name='d' value='%KD%'>
     <b>Setpoint:</b> <input type='number' step='0.01' name='t' value='%SP%'>
     <b>Turning Kp:</b> <input type='number' step='0.001' name='tkp' value='%TKP%'>
     <b>Turning Kd:</b> <input type='number' step='0.001' name='tkd' value='%TKD%'>
     <b>Velocity Kp:</b> <input type='number' step='0.01' name='vp' value='%VKP%'>
-    <b>Velocity Ki:</b> <input type='number' step='0.01' name='vi' value='%VKI%'>
-    <b>Velocity Kd:</b> <input type='number' step='0.001' name='vd' value='%VKD%'>
+    <b>Velocity Ki:</b> <input type='number' step='0.001' name='vi' value='%VKI%'>
     <b>KVeer:</b> <input type='number' step='0.01' name='kt' value='%KT%'>
     <b>Max Tilt:</b> <input type='number' step='0.01' name='tilt' value='%TILT%'>
+    <b>LF Forward Speed:</b> <input type='number' step='0.01' name='lff' value='%LFF%'>
+    <b>LF Turn Speed:</b> <input type='number' step='0.01' name='lft' value='%LFT%'>
     <input type='submit' class='btn update-btn' value='UPDATE PID'>
   </form>
   
@@ -94,6 +126,31 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
   </form>
 
 <script>
+  function changeMode(selectedMode) {
+    fetch('/setMode?mode=' + selectedMode)
+    .then(response => {
+        if (response.ok) {
+            console.log("Mode successfully changed to: " + selectedMode);
+            updateButtonStyles(selectedMode);
+        } else {
+            alert("Failed to change robot mode.");
+        }
+    })
+    .catch(err => console.error("Error setting mode:", err));
+  }
+
+  function updateButtonStyles(activeMode) {
+    document.getElementById('btn-manual').classList.remove('active');
+    document.getElementById('btn-line').classList.remove('active');
+
+    // Add the 'active' highlight to the button currently running on the bot
+    if (activeMode === 'MANUAL') {
+        document.getElementById('btn-manual').classList.add('active');
+    } else if (activeMode === 'LINE') {
+        document.getElementById('btn-line').classList.add('active');
+    }
+  }
+
   const ctx = document.getElementById('tiltChart').getContext('2d');
   const chart = new Chart(ctx, {
     type: 'line',
@@ -106,6 +163,16 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
   
   setInterval(() => {
     fetch('/data').then(r => r.json()).then(d => {
+      const modeEl = document.getElementById('modeText');
+      if (d.mode === 0) {
+        modeEl.innerText = 'Manual';
+        modeEl.className = 'mode-manual';
+      } else if (d.mode === 1) {
+        modeEl.innerText = 'Line Following';
+        modeEl.className = 'mode-line';
+      } else {
+        modeEl.innerText = 'mode-unknown';
+      }
       
       // Update Status Text
       const statusEl = document.getElementById('statusText');
@@ -164,7 +231,19 @@ const char WEBPAGE_HTML[] PROGMEM = R"rawliteral(
     el.addEventListener('pointerleave', release); // Covers dragging off the button
   }
 
+  function initModeState() {
+    fetch('/data').then(r => r.json()).then(d => {
+      if (d.mode === 0) {
+        updateButtonStyles('MANUAL');
+      } else if (d.mode === 1) {
+        updateButtonStyles('LINE');
+      }
+    })
+    .catch(err => console.log("Initial mode sync failed", err));
+  }
+
   window.onload = () => {
+    initModeState();
     bindBtn('up', 'F');
     bindBtn('down', 'B');
     bindBtn('left', 'L');
