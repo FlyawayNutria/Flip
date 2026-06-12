@@ -503,9 +503,9 @@ void loop() {
         Serial.print(",\"active\":"); Serial.print(robot_active ? "true" : "false");
         Serial.print(",\"turning\":"); Serial.print(is_turning ? "true" : "false");
         Serial.print(",\"mode\":"); Serial.print((int)current);
-        Serial.print(",\"v0\":"); Serial.print(channelVoltages[0], 2);
-        Serial.print(",\"v1\":"); Serial.print(channelVoltages[1], 2);
-        Serial.print(",\"v2\":"); Serial.print(channelVoltages[2], 2);
+        Serial.print(",\"v0\":"); Serial.print(channelVoltages[0], 4);
+        Serial.print(",\"v1\":"); Serial.print(channelVoltages[1], 4);
+        Serial.print(",\"v2\":"); Serial.print(channelVoltages[2], 4);
         Serial.println("}");
 	}
 }
