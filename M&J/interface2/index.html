@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Balance Bot Tuning</title>
+  <style>
+    body { font-family: Arial; padding: 20px; max-width: 400px; margin: auto; text-align: center; }
+    input { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
+    .btn {
+      padding: 15px;
+      font-size: 16px;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      width: 100%;
+      transition: all 0.1s ease;
+      box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+      margin-bottom: 10px;
+    }
+
+    .btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 rgba(0,0,0,0.2);
+      filter: brightness(0.8);
+    }
+
+    .mode-btn {
+      background-color: #e7e7e7; 
+      color: black; 
+      border: 2px solid #bbb;
+      padding: 10px 20px;
+      text-align: center;
+      font-size: 16px;
+      margin: 4px 2px;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: 0.3s;
+  }
+
+  /* Visually highlight the active state */
+  .mode-btn.active {
+      background-color: #4CAF50; /* Green highlight */
+      color: white;
+      border-color: #45a049;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  }
+
+    .update-btn { background-color: #4CAF50; margin-bottom: 20px; }
+    .stop-btn { background-color: #f44336; }
+    .gyro-btn { background-color: #ff9800; }
+    .dpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 20px 0; }
+    .dpad .btn { margin-bottom: 0; }
+    .status-box {
+      background: #f2f2f2;
+      padding: 10px;
+      border-radius: 5px;
+      margin-bottom: 15px;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    .status-armed { color: #4CAF50; }
+    .status-disarmed { color: #f44336; }
+    .status-turning { color: #ff9800; }
+    .status-straight { color: #607d8b; }
+    .mode-unknown { color: #607d8b; }
+    .mode-manual { color: #4CAF50; }
+    .mode-line { color: #ff9800; }
+
+  </style>
+  <script src='https://cdn.jsdelivr.net/npm/chart.js'></script>
+</head>
+<body>
+  <h2>Balance Bot Tuning</h2>
+
+  <div class="status-box">
+    <div style="margin-bottom: 5px;">Status: <span id="statusText" class="status-disarmed">DISARMED</span></div>
+    <div>Turning: <span id="turningText" class="status-straight">NO</span></div>
+    <div>Mode: <span id="modeText" class="mode-unknown">Default</span></div>
+  </div>
+
+  <div style="width: 100%; max-width: 360px; margin: 15px auto; border-radius: 8px; overflow: hidden; border: 1px solid #ccc;">
+    <h3 style="margin: 5px 0; font-size: 14px; font-family: Arial;">Live Camera Feed</h3>
+    <img src="{{ url_for('video_feed') }}" style="width: 100%; height: auto; display: block; background: #333;" alt="Camera loading...">
+  </div>
+
+  <div style='width:100%; height:250px; margin-bottom: 20px;'>
+    <canvas id='tiltChart'></canvas>
+  </div>
+
+  <button id="clearGraphBtn" class="btn" style="background:#607d8b;">
+    Clear Graph
+  </button>
+
+  <div class="dpad">
+    <button id="turn2" class="btn">&#8634;</button><button id="up" class="btn">&#9650;</button><button id="turn1" class="btn">&#8635;</button>
+    <button id="left" class="btn">&#9664;</button><button id="stop" class="btn" style="background:#666;">&#9632;</button><button id="right" class="btn">&#9654;</button>
+    <button id="fwleft" class="btn">FL</button><button id="down" class="btn">&#9660;</button><button id="fwright" class="btn">FR</button>
+  </div>
+
+  <div class="mode-container" style="text-align: center; margin: 20px 0;">
+    <h3>Bot Mode</h3>
+    <button id="btn-manual" class="mode-btn" onclick="changeMode('MANUAL')">Manual Control</button>
+    <button id="btn-line" class="mode-btn" onclick="changeMode('LINE')">Line Follower</button>
+  </div>
+
+  <form id="pidForm">
+    <b>Kp:</b> <input type='number' step='0.01' name='p' value='%KP%'>
+    <b>Kd:</b> <input type='number' step='0.01' name='d' value='%KD%'>
+    <b>Setpoint:</b> <input type='number' step='0.01' name='t' value='%SP%'>
+    <b>Turning Kp:</b> <input type='number' step='0.001' name='tkp' value='%TKP%'>
+    <b>Turning Kd:</b> <input type='number' step='0.001' name='tkd' value='%TKD%'>
+    <b>Velocity Kp:</b> <input type='number' step='0.01' name='vp' value='%VKP%'>
+    <b>Velocity Ki:</b> <input type='number' step='0.001' name='vi' value='%VKI%'>
+    <b>KVeer:</b> <input type='number' step='0.01' name='kt' value='%KT%'>
+    <b>Max Tilt:</b> <input type='number' step='0.01' name='tilt' value='%TILT%'>
+    <b>LF Forward Speed:</b> <input type='number' step='0.01' name='lff' value='%LFF%'>
+    <b>LF Turn Speed:</b> <input type='number' step='0.01' name='lft' value='%LFT%'>
+    <button type="button" class="btn update-btn" onclick="sendPID()">UPDATE CONFIG</button>
+  </form>
+  
+  <hr style='margin: 20px 0;'>
+  <button id="calibrateBtn" class="btn gyro-btn">Calibrate Gyro</button>
+  <button class="btn stop-btn" onclick="socket.emit('command', 'STOP')">EMERGENCY STOP</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+    const socket = io();
+
+    socket.on('connect', () => {
+        console.log('Connected to Pi Server!');
+        socket.emit('request_initial_values');
+    });
+
+    // Handles live data packets arriving from ESP32 via Python
+    socket.on('telemetry_sync', (d) => {
+        if (d.init) {
+            // Sync form values on handshake
+            document.getElementById('p').value = d.p;
+            document.getElementById('d').value = d.d;
+            document.getElementById('t').value = d.t;
+            document.getElementById('tkp').value = d.tkp;
+            document.getElementById('tkd').value = d.tkd;
+            document.getElementById('vp').value = d.vp;
+            document.getElementById('vi').value = d.vi;
+            document.getElementById('kt').value = d.kt;
+            document.getElementById('tilt').value = d.tilt;
+            document.getElementById('lff').value = d.lff;
+            document.getElementById('lft').value = d.lft;
+            return;
+        }
+        // Update structural elements
+        const modeEl = document.getElementById('modeText');
+        if (d.mode === 0) { modeEl.innerText = 'Manual'; modeEl.className = 'mode-manual'; updateButtonStyles('MANUAL'); } 
+        else if (d.mode === 1) { modeEl.innerText = 'Line Following'; modeEl.className = 'mode-line'; updateButtonStyles('LINE'); }
+
+        const statusEl = document.getElementById('statusText');
+        if (d.active) {
+            statusEl.innerText = 'ARMED'; statusEl.className = 'status-armed';
+        } else {
+            statusEl.innerText = 'DISARMED'; statusEl.className = 'status-disarmed';
+            return; 
+        }
+
+        const turnEl = document.getElementById('turningText');
+        turnEl.innerText = d.turning ? 'YES' : 'NO';
+        turnEl.className = d.turning ? 'status-turning' : 'status-straight';
+
+        // Stream values onto tracking chart
+        chart.data.labels.push('');
+        chart.data.datasets[0].data.push(d.tilt);
+        chart.data.datasets[1].data.push(d.set);
+        if (chart.data.labels.length > 100) {
+            chart.data.labels.shift(); chart.data.datasets[0].data.shift(); chart.data.datasets[1].data.shift();
+        }
+        chart.update();
+  });
+
+    function sendPID() {
+        socket.emit('update_pid', {
+            p: document.getElementById('p').value, d: document.getElementById('d').value, t: document.getElementById('t').value,
+            tkp: document.getElementById('tkp').value, tkd: document.getElementById('tkd').value, vp: document.getElementById('vp').value,
+            vi: document.getElementById('vi').value, kt: document.getElementById('kt').value, tilt: document.getElementById('tilt').value,
+            lff: document.getElementById('lff').value, lft: document.getElementById('lft').value
+        });
+    }
+
+    function changeMode(mode) { socket.emit('change_mode', mode); }
+
+    function updateButtonStyles(activeMode) {
+        document.getElementById('btn-manual').classList.toggle('active', activeMode === 'MANUAL');
+        document.getElementById('btn-line').classList.toggle('active', activeMode === 'LINE');
+    }
+
+    const ctx = document.getElementById('tiltChart').getContext('2d');
+    const chart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: [], datasets: [
+        { label: 'Actual Tilt', borderColor: '#f44336', data: [], pointRadius: 0, borderWidth: 2 },
+        { label: 'Setpoint', borderColor: '#2196F3', borderDash: [5,5], data: [], pointRadius: 0, borderWidth: 2 }
+    ]},
+    options: { animation: false, responsive: true, maintainAspectRatio: false, scales: { x: { display: false } } }
+    });
+
+    function bindBtn(id, cmd) {
+        let el = document.getElementById(id);
+        let pressed = false;
+        const press = (e) => { e.preventDefault(); pressed = true; socket.emit('command', cmd); };
+        const release = (e) => { e.preventDefault(); if (!pressed) return; pressed = false; socket.emit('command', 'S'); };
+        el.addEventListener('pointerdown', press);
+        el.addEventListener('pointerup', release);
+        el.addEventListener('pointerleave', release);
+    }
+
+    window.onload = () => {
+        bindBtn('up', 'F'); bindBtn('down', 'B'); bindBtn('left', 'L'); bindBtn('right', 'R');
+        bindBtn('fwleft', 'FL'); bindBtn('fwright', 'FR');
+
+        document.getElementById('turn1').onclick = (e) => { e.preventDefault(); socket.emit('command', 'T1'); };
+        document.getElementById('turn2').onclick = (e) => { e.preventDefault(); socket.emit('command', 'T2'); };
+        document.getElementById('stop').onclick = (e) => { e.preventDefault(); socket.emit('command', 'STOP'); };
+        document.getElementById('calibrateBtn').onclick = (e) => { e.preventDefault(); socket.emit('command', 'CAL'); };
+        document.getElementById('clearGraphBtn').onclick = (e) => { 
+            e.preventDefault(); chart.data.labels = []; chart.data.datasets[0].data = []; chart.data.datasets[1].data = []; chart.update();
+        };
+    };
+</script>
+</body>
+</html>
