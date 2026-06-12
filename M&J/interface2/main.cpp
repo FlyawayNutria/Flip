@@ -198,6 +198,23 @@ void updateLineFollowing() {
     is_turning = false; //Doesn't use closed loop turning
 }
 
+//Power and Battery consumption
+const float VREF = 4.096;
+float channelVoltages[3] = {0.0, 0.0, 0.0};
+static uint8_t currentChannel = 0;
+uint16_t readADC(uint8_t channel) {
+  channel = channel & 0x07; 
+  uint8_t txByte0 = 0x06 | (channel >> 2);  
+  uint8_t txByte1 = (channel & 0x03) << 6;  
+  digitalWrite(ADC_CS_PIN, LOW); 
+  SPI.transfer(txByte0);                    
+  uint8_t rx0 = SPI.transfer(txByte1);      
+  uint8_t rx1 = SPI.transfer(0x00);         
+  digitalWrite(ADC_CS_PIN, HIGH); 
+  uint16_t result = ((rx0 & 0x0F) << 8) | rx1; 
+  return result;
+}
+
 ESP32Timer ITimer(3);
 Adafruit_MPU6050 mpu;
 
@@ -402,6 +419,11 @@ void loop() {
 	if (millis() > loopTimer) {
 		loopTimer += LOOP_INTERVAL;
 
+        uint16_t rawADC = readADC(currentChannel);
+        channelVoltages[currentChannel] = (rawADC * VREF) / 4095.0;
+        currentChannel++;
+        if (currentChannel >= 3) { currentChannel = 0; }
+
 		sensors_event_t a, g, temp;
 		mpu.getEvent(&a, &g, &temp);
 
@@ -481,6 +503,9 @@ void loop() {
         Serial.print(",\"active\":"); Serial.print(robot_active ? "true" : "false");
         Serial.print(",\"turning\":"); Serial.print(is_turning ? "true" : "false");
         Serial.print(",\"mode\":"); Serial.print((int)current);
+        Serial.print(",\"v0\":"); Serial.print(channelVoltages[0], 2);
+        Serial.print(",\"v1\":"); Serial.print(channelVoltages[1], 2);
+        Serial.print(",\"v2\":"); Serial.print(channelVoltages[2], 2);
         Serial.println("}");
 	}
 }
