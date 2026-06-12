@@ -77,6 +77,9 @@
     <div style="margin-bottom: 5px;">Status: <span id="statusText" class="status-disarmed">DISARMED</span></div>
     <div>Turning: <span id="turningText" class="status-straight">NO</span></div>
     <div>Mode: <span id="modeText" class="mode-unknown">Default</span></div>
+    <div>CH0: <span id="v0Text" style="color:#2e7d32;">0.00</span>V</div>
+    <div>CH1: <span id="v1Text" style="color:#2e7d32;">0.00</span>V</div>
+    <div>CH2: <span id="v2Text" style="color:#2e7d32;">0.00</span>V</div>
   </div>
 
   <div style="width: 100%; max-width: 360px; margin: 15px auto; border-radius: 8px; overflow: hidden; border: 1px solid #ccc;">
@@ -147,6 +150,9 @@
             document.getElementById('tilt').value = d.tilt;
             document.getElementById('lff').value = d.lff;
             document.getElementById('lft').value = d.lft;
+            if (d.v0 !== undefined) document.getElementById('v0Text').innerText = d.v0.toFixed(4);
+            if (d.v1 !== undefined) document.getElementById('v1Text').innerText = d.v1.toFixed(4);
+            if (d.v2 !== undefined) document.getElementById('v2Text').innerText = d.v2.toFixed(4);
             return;
         }
         // Update structural elements
