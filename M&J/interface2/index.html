@@ -108,17 +108,17 @@
   </div>
 
   <form id="pidForm">
-    <b>Kp:</b> <input type='number' step='0.01' name='p' value='%KP%'>
-    <b>Kd:</b> <input type='number' step='0.01' name='d' value='%KD%'>
-    <b>Setpoint:</b> <input type='number' step='0.01' name='t' value='%SP%'>
-    <b>Turning Kp:</b> <input type='number' step='0.001' name='tkp' value='%TKP%'>
-    <b>Turning Kd:</b> <input type='number' step='0.001' name='tkd' value='%TKD%'>
-    <b>Velocity Kp:</b> <input type='number' step='0.01' name='vp' value='%VKP%'>
-    <b>Velocity Ki:</b> <input type='number' step='0.001' name='vi' value='%VKI%'>
-    <b>KVeer:</b> <input type='number' step='0.01' name='kt' value='%KT%'>
-    <b>Max Tilt:</b> <input type='number' step='0.01' name='tilt' value='%TILT%'>
-    <b>LF Forward Speed:</b> <input type='number' step='0.01' name='lff' value='%LFF%'>
-    <b>LF Turn Speed:</b> <input type='number' step='0.01' name='lft' value='%LFT%'>
+    <b>Kp:</b> <input type='number' step='0.01' id='p' value='%KP%'>
+    <b>Kd:</b> <input type='number' step='0.01' id='d' value='%KD%'>
+    <b>Setpoint:</b> <input type='number' step='0.01' id='t' value='%SP%'>
+    <b>Turning Kp:</b> <input type='number' step='0.001' id='tkp' value='%TKP%'>
+    <b>Turning Kd:</b> <input type='number' step='0.001' id='tkd' value='%TKD%'>
+    <b>Velocity Kp:</b> <input type='number' step='0.01' id='vp' value='%VKP%'>
+    <b>Velocity Ki:</b> <input type='number' step='0.001' id='vi' value='%VKI%'>
+    <b>KVeer:</b> <input type='number' step='0.01' id='kt' value='%KT%'>
+    <b>Max Tilt:</b> <input type='number' step='0.01' id='tilt' value='%TILT%'>
+    <b>LF Forward Speed:</b> <input type='number' step='0.01' id='lff' value='%LFF%'>
+    <b>LF Turn Speed:</b> <input type='number' step='0.01' id='lft' value='%LFT%'>
     <button type="button" class="btn update-btn" onclick="sendPID()">UPDATE CONFIG</button>
   </form>
   
@@ -150,11 +150,12 @@
             document.getElementById('tilt').value = d.tilt;
             document.getElementById('lff').value = d.lff;
             document.getElementById('lft').value = d.lft;
-            if (d.v0 !== undefined) document.getElementById('v0Text').innerText = d.v0.toFixed(4);
-            if (d.v1 !== undefined) document.getElementById('v1Text').innerText = d.v1.toFixed(4);
-            if (d.v2 !== undefined) document.getElementById('v2Text').innerText = d.v2.toFixed(4);
             return;
         }
+
+        if (d.v0 !== undefined) document.getElementById('v0Text').innerText = d.v0.toFixed(4);
+        if (d.v1 !== undefined) document.getElementById('v1Text').innerText = d.v1.toFixed(4);
+        if (d.v2 !== undefined) document.getElementById('v2Text').innerText = d.v2.toFixed(4);
         // Update structural elements
         const modeEl = document.getElementById('modeText');
         if (d.mode === 0) { modeEl.innerText = 'Manual'; modeEl.className = 'mode-manual'; updateButtonStyles('MANUAL'); } 
