@@ -34,6 +34,7 @@ picam2.start()
 def generate_frames():
     while True:
         frame = picam2.capture_array()
+        frame = cv2.flip(frame, -1) #flip the camera as it's mounted upside down
         # Compress to JPEG to save network bandwidth
         ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
         if not ret:
