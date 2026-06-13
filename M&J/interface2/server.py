@@ -64,7 +64,7 @@ def get_values():
 
 @socketio.on('command')
 def handle_command(cmd):
-    # Sends movement keys: F, B, L, R, S, T1, T2, FL, FR, CAL, STOP
+    # Sends movement keys: F, B, L, R, S, T1, T2, FL, FR, CAL_G, CAL_A, STOP
     print(f"Sending command: {cmd}")
     ser.write(f"CMD:{cmd}\n".encode('utf-8'))
 

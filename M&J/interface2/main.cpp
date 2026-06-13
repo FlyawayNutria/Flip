@@ -6,12 +6,101 @@
 #include <step.h>
 #include "secrets.h"
 #include "calibrate.h" //Calibrate the MPU6050
+#include <Preferences.h> //Save the gyro and accel offsets to flash
 
 struct Vec3 { float x; float y; float z; }; //3x1 vector
 
 //Multiplies a 3x3 matrix by a 3x1 vector
 Vec3 matMul(const float R[3][3], Vec3 v) { Vec3 out; out.x = R[0][0] * v.x + R[0][1] * v.y + R[0][2] * v.z; out.y = R[1][0] * v.x + R[1][1] * v.y + R[1][2] * v.z; out.z = R[2][0] * v.x + R[2][1] * v.y + R[2][2] * v.z; return out; }
 float R_sensor_to_robot[3][3] = { { 1.0, 0.0, 0.0 }, { 0.0, 1.0, 0.0 }, { 0.0, 0.0, 1.0 } };
+
+Preferences prefs;
+float accel_pitch_correction = 0.0; //All in degrees
+const float UPRIGHT_ANGLE = 90.0;
+bool a_calibrating = false;
+unsigned long accel_cal_start = 0; //in ms
+unsigned long accel_cal_count = 0;
+double accel_cal_sum = 0.0;
+const unsigned long ACCEL_CAL_DURATION = 8000;
+const unsigned long ACCEL_CAL_WARMUP = 500;
+const float MAX_ACCEL_DELTA = 8.0; //Maximum pitch correction allowed
+
+void applyAccelPitchCorrection(float correction_deg) {
+    float r = correction_deg * PI / 180.0;
+    float c = cos(r);
+    float sn = sin(r);
+
+    // Rotation about the Y axis to correct pitch mounting error.
+    R_sensor_to_robot[0][0] = c;
+    R_sensor_to_robot[0][1] = 0.0;
+    R_sensor_to_robot[0][2] = sn;
+
+    R_sensor_to_robot[1][0] = 0.0;
+    R_sensor_to_robot[1][1] = 1.0;
+    R_sensor_to_robot[1][2] = 0.0;
+
+    R_sensor_to_robot[2][0] = -sn;
+    R_sensor_to_robot[2][1] = 0.0;
+    R_sensor_to_robot[2][2] = c;
+}
+
+void saveAccelCalibration() {
+    prefs.begin("accelcal", false);
+    prefs.putFloat("pitch_deg", accel_pitch_correction);
+    prefs.end();
+}
+
+void loadAccelCalibration() {
+    prefs.begin("accelcal", true);
+    accel_pitch_correction = prefs.getFloat("pitch_deg", 0.0);
+    prefs.end();
+    applyAccelPitchCorrection(accel_pitch_correction);
+}
+
+void resetAccelCalibration() {
+    applyAccelPitchCorrection(0.0);
+    saveAccelCalibration();
+}
+
+void calibrateAccel() {
+    if (!robot_active) return; // Must be balancing!
+    a_calibrating = true;
+    accel_cal_start = millis();
+    accel_cal_count = 0;
+    accel_cal_sum = 0.0;
+}
+
+void updateAccelCalibration(float accel_tilt) {
+    if (!a_calibrating) return;
+
+    if (!robot_active) {
+        a_calibrating = false;
+        return;
+    }
+
+    unsigned long elapsed = millis() - accel_cal_start;
+    if (elapsed >= ACCEL_CAL_WARMUP) {
+        accel_cal_sum += accel_tilt;
+        accel_cal_count++;
+    }
+
+    if (elapsed >= ACCEL_CAL_DURATION) {
+        if (accel_cal_count > 0) {
+            float avg_accel_tilt = accel_cal_sum / accel_cal_count;
+            float delta = UPRIGHT_ANGLE - avg_accel_tilt;
+
+            if (fabsf(delta) <= MAX_ACCEL_DELTA) {
+                accel_pitch_correction += delta;
+                applyAccelPitchCorrection(accel_pitch_correction);
+                saveAccelCalibration();
+
+                tiltx += delta;
+                setpoint += delta;
+            }
+        }
+        a_calibrating = false;
+    }
+}
 
 // Manually measured gyro bias, in rad/s, subtracted from GYRO readings. 
 float GYRO_BIAS_X = -0.029064;
@@ -91,8 +180,8 @@ const int SENSOR_PINS[NUM_SENSORS] = {32, 33, 34};
 int rawLeft = 0;
 int rawCenter = 0;  
 int rawRight  = 0;  
-float LINE_F_SPEED = 0.4; //Line forward speed
-float LINE_T_SPEED = 0.45; //Line turn speed
+float LINE_F_SPEED = 10; //Line forward speed
+float LINE_T_SPEED = 2; //Line turn speed
 const int TAPE_THRESHOLD         = 2000;  // Stricter general tape detection edge
 const int CENTER_LOCK_THRESHOLD  = 1500;  // Deep center requirement to stop rotating
 
@@ -306,6 +395,8 @@ void setup() {
 	mpu.setGyroRange(MPU6050_RANGE_250_DEG);
 	mpu.setFilterBandwidth(MPU6050_BAND_44_HZ);
 
+    loadAccelCalibration(); //Load from flash MPU pitch correction angle
+
 	//Initialise IR array for line following
 	analogReadResolution(12);
 	for (int i = 0; i < NUM_SENSORS; i++) {
@@ -352,7 +443,9 @@ void loop() {
                 else if (dir == "T2" && !is_turning) { startSpotTurn(-90.0); }
                 else if (dir == "FL") { target_drive_velocity = MAX_DRIVE_VELOCITY; steering_offset = TURN_SPEED * Kveer; is_turning = false; driving = true; }
                 else if (dir == "FR") { target_drive_velocity = MAX_DRIVE_VELOCITY; steering_offset = -TURN_SPEED * Kveer; is_turning = false; driving = true; }
-                else if (dir == "CAL") { resetBot(); calibrateGyro(); }
+                else if (dir == "CAL_G") { resetBot(); calibrateGyro(); }
+                else if (dir == "CAL_A") { calibrateAccel(); }
+                else if (dir == "RESET_A") { resetAccelCalibration(); tiltx = setpoint; } //Reset calibration if something goes wrong during
                 else if (dir == "STOP" || dir == "S") { clearDrive(); steering_offset = 0.0; }//resetBot(); }
                 else {
                     target_drive_velocity = 0.0;
@@ -437,6 +530,8 @@ void loop() {
 		float accel_tilt = atan2(accelRobot.x, accelRobot.z) * 180.0 / PI;
 		float gyro_tilt  = -gyroRobot.y * 180.0 / PI;
 
+        updateAccelCalibration(accel_tilt); //Will return if not calibrating, or not active
+
 		tiltx = (1.0 - C) * accel_tilt + C * (tiltx + gyro_tilt * DT); //Complementary filter
 
 		//Track yaw for the 90 degree turn (x is the yaw axis)
@@ -506,6 +601,11 @@ void loop() {
         Serial.print(",\"v0\":"); Serial.print(channelVoltages[0], 4);
         Serial.print(",\"v1\":"); Serial.print(channelVoltages[1], 4);
         Serial.print(",\"v2\":"); Serial.print(channelVoltages[2], 4);
+        Serial.print(",\"gbx\":"); Serial.print(GYRO_BIAS_X, 4);
+        Serial.print(",\"gby\":"); Serial.print(GYRO_BIAS_Y, 4);
+        Serial.print(",\"gbz\":"); Serial.print(GYRO_BIAS_Z, 4);
+        Serial.print(",\"ab\":"); Serial.print(accel_pitch_correction, 4);
+        Serial.print(",\"ac\":"); Serial.print(a_calibrating ? "true" : "false");   
         Serial.println("}");
 	}
 }

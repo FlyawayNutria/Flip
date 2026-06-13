@@ -36,19 +36,21 @@
       cursor: pointer;
       border-radius: 8px;
       transition: 0.3s;
-  }
+    }
 
-  /* Visually highlight the active state */
-  .mode-btn.active {
-      background-color: #4CAF50; /* Green highlight */
-      color: white;
-      border-color: #45a049;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-  }
+    /* Visually highlight the active state */
+    .mode-btn.active {
+        background-color: #4CAF50; /* Green highlight */
+        color: white;
+        border-color: #45a049;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
 
     .update-btn { background-color: #4CAF50; margin-bottom: 20px; }
     .stop-btn { background-color: #f44336; }
-    .gyro-btn { background-color: #ff9800; }
+    .gyro-btn { background-color: #ff9800; margin:0; flex:1; }
+    .accel-btn { background-color: #008CBA; margin:0; flex:1; }
+    .reset-btn { background-color:#607d8b; margin-bottom:10px; padding:10px; }
     .dpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 20px 0; }
     .dpad .btn { margin-bottom: 0; }
     .status-box {
@@ -59,13 +61,13 @@
       font-size: 16px;
       font-weight: bold;
     }
-    .status-armed { color: #4CAF50; }
-    .status-disarmed { color: #f44336; }
-    .status-turning { color: #ff9800; }
-    .status-straight { color: #607d8b; }
-    .mode-unknown { color: #607d8b; }
-    .mode-manual { color: #4CAF50; }
-    .mode-line { color: #ff9800; }
+    
+    .green { color: #4CAF50; } /*Green*/
+    .red { color: #f44336; } /*Red*/
+    .yellow { color: #ff9800; } /*Yellow*/
+    .grey { color: #607d8b; } /*Grey*/
+    .sep { font-size: 14px; text-align: left; padding-left: 10px; margin-top: 3px; }
+    #clearGraphBtn { background:#607d8b; }
 
   </style>
   <script src='https://cdn.jsdelivr.net/npm/chart.js'></script>
@@ -74,13 +76,26 @@
   <h2>Balance Bot Tuning</h2>
 
   <div class="status-box">
-    <div style="margin-bottom: 5px;">Status: <span id="statusText" class="status-disarmed">DISARMED</span></div>
-    <div>Turning: <span id="turningText" class="status-straight">NO</span></div>
-    <div>Mode: <span id="modeText" class="mode-unknown">Default</span></div>
-    <div>CH0: <span id="v0Text" style="color:#2e7d32;">0.00</span>V</div>
-    <div>CH1: <span id="v1Text" style="color:#2e7d32;">0.00</span>V</div>
-    <div>CH2: <span id="v2Text" style="color:#2e7d32;">0.00</span>V</div>
+    <div style="margin-bottom: 5px;">Status: <span id="statusText" class="red">DISARMED</span></div>
+    <div>Turning: <span id="turningText" class="grey">NO</span></div>
+    <div>Mode: <span id="modeText" class="grey">Default</span></div>
+    <div>Accel Calibrating: <span id="aCalText" class="red">NO</span></div>
+    <hr class="sep">
+    <div style="font-size: 14px; text-align: left; padding-left: 10px;">
+      <b>Gyro Bias:</b> [X: <span id="gbX">0.0</span>, Y: <span id="gbY">0.0</span>, Z: <span id="gbZ">0.0</span>]
+    </div>
+    <div style="font-size: 14px; text-align: left; padding-left: 10px; margin-top: 3px;">
+      <b>Accel Bias:</b> Pitch Correction: <span id="ab">0.00</span>
+    </div>
+    <hr class="sep">
+  <div>CH0: <span id="v0Text" class="green">0.00</span>V | CH1: <span id="v1Text" class="green">0.00</span>V | CH2: <span id="v2Text" class="green">0.00</span>V</div>
+  <div style="margin-top: 8px; font-size: 13px; background: #e0f2f1; padding: 8px; border-radius: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; text-align: left;">
+  <div><b>5V Current:</b> <span id="calc1" class="green">0.0000</span></div>
+  <div><b>Battery Current:</b> <span id="calc2" class="green">0.0000</span></div>
+  <div><b>5V Power:</b> <span id="calc3" class="green">0.0000</span></div>
+  <div><b>Battery Power:</b> <span id="calc4" class="green">0.0000</span></div>
   </div>
+</div>
 
   <div style="width: 100%; max-width: 360px; margin: 15px auto; border-radius: 8px; overflow: hidden; border: 1px solid #ccc;">
     <h3 style="margin: 5px 0; font-size: 14px; font-family: Arial;">Live Camera Feed</h3>
@@ -91,7 +106,7 @@
     <canvas id='tiltChart'></canvas>
   </div>
 
-  <button id="clearGraphBtn" class="btn" style="background:#607d8b;">
+  <button id="clearGraphBtn" class="btn">
     Clear Graph
   </button>
 
@@ -123,8 +138,12 @@
   </form>
   
   <hr style='margin: 20px 0;'>
-  <button id="calibrateBtn" class="btn gyro-btn">Calibrate Gyro</button>
-  <button class="btn stop-btn" onclick="socket.emit('command', 'STOP')">EMERGENCY STOP</button>
+  <div style="display: flex; gap: 10px; margin: 20px 0;">
+    <button id="calibrateGBtn" class="btn gyro-btn">Calibrate Gyro</button>
+    <button id="calibrateABtn" class="btn accel-btn">Calibrate Accel</button>
+  </div>
+  <button id="resetABtn" class="btn reset-btn">Reset Accel Offset</button>
+  <button id="eStop" class="btn stop-btn">EMERGENCY STOP</button>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
 <script>
@@ -156,22 +175,54 @@
         if (d.v0 !== undefined) document.getElementById('v0Text').innerText = d.v0.toFixed(4);
         if (d.v1 !== undefined) document.getElementById('v1Text').innerText = d.v1.toFixed(4);
         if (d.v2 !== undefined) document.getElementById('v2Text').innerText = d.v2.toFixed(4);
-        // Update structural elements
-        const modeEl = document.getElementById('modeText');
-        if (d.mode === 0) { modeEl.innerText = 'Manual'; modeEl.className = 'mode-manual'; updateButtonStyles('MANUAL'); } 
-        else if (d.mode === 1) { modeEl.innerText = 'Line Following'; modeEl.className = 'mode-line'; updateButtonStyles('LINE'); }
 
-        const statusEl = document.getElementById('statusText');
-        if (d.active) {
-            statusEl.innerText = 'ARMED'; statusEl.className = 'status-armed';
-        } else {
-            statusEl.innerText = 'DISARMED'; statusEl.className = 'status-disarmed';
-            return; 
+        //Compute the currents based on Muhammad's equations:
+        //15V: y=16.936x+0.2617
+        //5V: y=97.936x+0.0179
+        if (d.v0 !== undefined && d.v1 !== undefined && d.v2 !== undefined) {
+          let VB = d.v0; //Battery voltage: channel 0
+          let ch1 = d.v1; //Convert to 5V current: channel 1
+          let ch2 = d.v2; //Convert to Battery current: channel 2
+
+          let i5 = (ch1 - 0.0179) / 97.936; //5V current
+          document.getElementById('calc1').innerText = i5.toFixed(4);
+
+          let iBat = (ch2 - 0.2617) / 16.936; //Battery current
+          document.getElementById('calc2').innerText = iBat.toFixed(4);
+
+          let p5 = i5 * 5; //5V power
+          document.getElementById('calc3').innerText = p5.toFixed(4);
+
+          let pBat = VB * iBat; //Battery power
+          document.getElementById('calc4').innerText = pBat.toFixed(4);
         }
 
-        const turnEl = document.getElementById('turningText');
-        turnEl.innerText = d.turning ? 'YES' : 'NO';
-        turnEl.className = d.turning ? 'status-turning' : 'status-straight';
+        if (d.gbx !== undefined) document.getElementById('gbX').innerText = d.gbx.toFixed(4);
+        if (d.gby !== undefined) document.getElementById('gby').innerText = d.gby.toFixed(4);
+        if (d.gbz !== undefined) document.getElementById('gbz').innerText = d.gbz.toFixed(4);
+        if (d.ab !== undefined) document.getElementById('ab').innerText = d.ab.toFixed(4);
+        // Update structural elements
+        const modeEl = document.getElementById('modeText');
+        if (d.mode === 0) { modeEl.innerText = 'Manual'; modeEl.className = 'green'; updateButtonStyles('MANUAL'); } 
+        else if (d.mode === 1) { modeEl.innerText = 'Line Following'; modeEl.className = 'yellow'; updateButtonStyles('LINE'); }
+
+        if (d.ac !== undefined) {
+          const aCalEl = document.getElementById('aCalText'); 
+          aCalEl.innerText = d.ac ? 'YES' : 'NO';
+          aCalEl.className = d.ac ? 'green' : 'red';
+        }
+        
+        if (d.active !== undefined) {
+          const statusEl = document.getElementById('statusText'); 
+          statusEl.innerText = d.active ? 'ARMED' : 'DISARMED';
+          statusEl.className = d.active ? 'green' : 'red';
+        }
+
+        if (d.turning !== undefined) {
+          const turnEl = document.getElementById('turningText');
+          turnEl.innerText = d.turning ? 'YES' : 'NO';
+          turnEl.className = d.turning ? 'yellow' : 'grey';
+        }
 
         // Stream values onto tracking chart
         chart.data.labels.push('');
@@ -226,10 +277,13 @@
         document.getElementById('turn1').onclick = (e) => { e.preventDefault(); socket.emit('command', 'T1'); };
         document.getElementById('turn2').onclick = (e) => { e.preventDefault(); socket.emit('command', 'T2'); };
         document.getElementById('stop').onclick = (e) => { e.preventDefault(); socket.emit('command', 'STOP'); };
-        document.getElementById('calibrateBtn').onclick = (e) => { e.preventDefault(); socket.emit('command', 'CAL'); };
+        document.getElementById('calibrateGBtn').onclick = (e) => { e.preventDefault(); socket.emit('command', 'CAL_G'); };
+        document.getElementById('calibrateABtn').onclick = (e) => { e.preventDefault(); socket.emit('command', 'CAL_A' ); };
+        document.getElementById('resetABtn').onclick = (e) => { e.preventDefault(); socket.emit('command', 'RESET_A' ); };
         document.getElementById('clearGraphBtn').onclick = (e) => { 
             e.preventDefault(); chart.data.labels = []; chart.data.datasets[0].data = []; chart.data.datasets[1].data = []; chart.update();
         };
+        document.getElementById('eStop').onclick = (e) => { e.preventDefault(); socket.emit('command', 'STOP'); };
     };
 </script>
 </body>
